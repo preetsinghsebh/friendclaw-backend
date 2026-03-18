@@ -1,0 +1,23 @@
+{
+  "name": "DostAI - Your AI Companion",
+  "short_name": "DostAI",
+  "description": "Premium AI companions that remember everything. Chat with Ziva, Liam, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05050A",
+  "theme_color": "#FFB300",
+  "icons": [
+    {
+      "src": "/assets/logo_pwa_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/logo_pwa_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
