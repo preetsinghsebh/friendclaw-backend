@@ -1,0 +1,117 @@
+services:
+  # 1. Sarvam Proxy
+  - type: web
+    name: sarvam-proxy
+    env: node
+    plan: free
+    rootDir: sarvam-proxy
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3000
+
+  # 2. OpenClaw Service (Telegram Orchestrator)
+  - type: web
+    name: openclaw-service
+    env: node
+    plan: free
+    rootDir: openclaw-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: SARVAM_PROXY_URL
+        fromService:
+          name: sarvam-proxy
+          type: web
+          property: host
+
+  # 3. Ziva Service
+  - type: web
+    name: ziva-service
+    env: node
+    plan: free
+    rootDir: ziva-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3006
+      - key: MONGODB_URI
+        sync: false
+
+  # 4. Liam Service
+  - type: web
+    name: liam-service
+    env: node
+    plan: free
+    rootDir: liam-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3007
+      - key: MONGODB_URI
+        sync: false
+
+  # 5. Anime Service
+  - type: web
+    name: anime-service
+    env: node
+    plan: free
+    rootDir: anime-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3008
+      - key: MONGODB_URI
+        sync: false
+
+  # 6. Celeb Service
+  - type: web
+    name: celeb-service
+    env: node
+    plan: free
+    rootDir: celeb-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3009
+      - key: MONGODB_URI
+        sync: false
+
+  # 7. SafeSpace Service
+  - type: web
+    name: safespace-service
+    env: node
+    plan: free
+    rootDir: safespace-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3010
+      - key: MONGODB_URI
+        sync: false
+
+  # 8. MindReset Service
+  - type: web
+    name: mindreset-service
+    env: node
+    plan: free
+    rootDir: mindreset-service
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: PORT
+        value: 3011
+      - key: MONGODB_URI
+        sync: false

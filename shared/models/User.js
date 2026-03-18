@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 const UserSchema = new mongoose.Schema({
     chatId: { type: String, required: true, unique: true },
     personaId: { type: String },
+    aiName: { type: String },
+    systemPrompt: { type: String },
     nicknames: [String],
     jokes: [String],
     facts: [String],
