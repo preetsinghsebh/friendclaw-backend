@@ -4,8 +4,9 @@ services:
     name: sarvam-proxy
     env: node
     plan: free
-    buildCommand: npm install --prefix sarvam-proxy
-    startCommand: node sarvam-proxy/adapter.js
+    rootDir: sarvam-proxy
+    buildCommand: npm install
+    startCommand: node adapter.js
     envVars:
       - key: PORT
         value: 3000
@@ -16,8 +17,9 @@ services:
     name: openclaw-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix openclaw-service
-    startCommand: node openclaw-service/src/index.js
+    rootDir: openclaw-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3001
@@ -35,8 +37,9 @@ services:
     name: ziva-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix ziva-service
-    startCommand: node ziva-service/src/index.js
+    rootDir: ziva-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3006
@@ -47,8 +50,9 @@ services:
     name: liam-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix liam-service
-    startCommand: node liam-service/src/index.js
+    rootDir: liam-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3007
@@ -59,8 +63,9 @@ services:
     name: anime-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix anime-service
-    startCommand: node anime-service/src/index.js
+    rootDir: anime-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3008
@@ -71,8 +76,9 @@ services:
     name: celeb-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix celeb-service
-    startCommand: node celeb-service/src/index.js
+    rootDir: celeb-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3009
@@ -83,8 +89,9 @@ services:
     name: safespace-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix safespace-service
-    startCommand: node safespace-service/src/index.js
+    rootDir: safespace-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3010
@@ -95,8 +102,9 @@ services:
     name: mindreset-service
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix mindreset-service
-    startCommand: node mindreset-service/src/index.js
+    rootDir: mindreset-service
+    buildCommand: npm install --prefix ../shared && npm install
+    startCommand: node src/index.js
     envVars:
       - key: PORT
         value: 3011
@@ -107,8 +115,9 @@ services:
     name: dostai-web
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix web && npm run build --prefix web
-    startCommand: npm run start --prefix web
+    rootDir: web
+    buildCommand: npm install --prefix ../shared && npm install && npm run build
+    startCommand: npm run start
     envVars:
       - fromGroup: dostai-shared
       - key: SARVAM_PROXY_URL
