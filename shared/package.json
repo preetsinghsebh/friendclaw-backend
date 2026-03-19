@@ -1,0 +1,9 @@
+{
+  "name": "dostai-shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "database.js",
+  "dependencies": {
+    "mongoose": "^9.3.1"
+  }
+}
