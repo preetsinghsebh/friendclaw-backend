@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../../shared/env.js';
 import TelegramBot from 'node-telegram-bot-api';
 import fetch from 'node-fetch';
 import cron from 'node-cron';

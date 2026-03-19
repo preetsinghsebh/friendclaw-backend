@@ -2,6 +2,7 @@
   "name": "dostai-shared",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "database.js",
   "dependencies": {
     "mongoose": "^9.3.1"

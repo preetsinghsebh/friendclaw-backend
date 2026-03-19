@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
-const uri = "mongodb+srv://mem98676_db_user:l6bZURRPYrHscclZ@friendclaw.u9uwmri.mongodb.net/?retryWrites=true&w=majority&appName=FRIENDCLAW";
+require('dotenv').config({ path: '../.env' });
+const uri = process.env.MONGODB_URI;
+
+if (!uri) {
+    console.error("Error: MONGODB_URI is not defined in environment variables.");
+    process.exit(1);
+}
 
 async function test() {
     console.log("Attempting to connect to MongoDB Atlas...");

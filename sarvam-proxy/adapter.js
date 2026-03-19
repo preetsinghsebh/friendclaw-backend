@@ -4,7 +4,7 @@
 
 const express = require('express');
 const fetch = require('node-fetch');
-require('dotenv').config();
+require('../shared/env.cjs');
 
 const app = express();
 app.use(express.json());
