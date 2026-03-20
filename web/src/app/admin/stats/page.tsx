@@ -15,7 +15,8 @@ export default function AdminStats() {
 
     const fetchStats = async () => {
         try {
-            const res = await fetch('/api/admin/stats')
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            const res = await fetch(`${apiUrl}/api/admin/stats`)
             const data = await res.json()
             setStats(data)
             setLoading(false)

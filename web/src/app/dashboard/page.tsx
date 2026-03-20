@@ -46,7 +46,8 @@ export default function Dashboard() {
 
         const fetchData = async () => {
             try {
-                const res = await fetch(`/api/user/stats?id=${chatId}`);
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+                const res = await fetch(`${apiUrl}/api/user/stats?id=${chatId}`);
                 if (res.ok) {
                     const data = await res.json();
                     setUserData(data);

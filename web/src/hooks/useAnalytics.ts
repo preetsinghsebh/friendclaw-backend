@@ -13,7 +13,8 @@ export function useAnalytics() {
         */
 
         // For this local build, we can also log it to an internal stats API if needed
-        fetch('/api/analytics', {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        fetch(`${apiUrl}/api/analytics`, {
             method: 'POST',
             body: JSON.stringify({ eventName, properties, timestamp }),
             headers: { 'Content-Type': 'application/json' }
