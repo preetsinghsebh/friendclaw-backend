@@ -200,12 +200,12 @@ function AuthForm() {
                         </div>
 
                         <div className="flex items-start space-x-3 pt-2">
-                            <Checkbox
-                                id="age-gate"
-                                checked={is18Plus}
-                                onCheckedChange={(c: boolean | 'indeterminate') => setIs18Plus(c === true)}
-                                className="mt-1 border-white/40 bg-white/5 data-[state=checked]:bg-white data-[state=checked]:text-black data-[state=checked]:border-white"
-                            />
+                             <Checkbox
+                                 id="age-gate"
+                                 checked={is18Plus}
+                                 onCheckedChange={(c: boolean | 'indeterminate') => setIs18Plus(c === true)}
+                                 className="mt-1 size-5 border-2 border-white/60 bg-white/10 data-[state=checked]:bg-white data-[state=checked]:text-black data-[state=checked]:border-white"
+                             />
                             <div className="grid leading-none gap-1.5">
                                 <Label htmlFor="age-gate" className="text-sm font-medium leading-tight text-gray-300 cursor-pointer font-inter">
                                     I confirm I am 18 years or older.
