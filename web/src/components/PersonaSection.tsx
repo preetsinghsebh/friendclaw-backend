@@ -64,7 +64,7 @@ const activeP = localizedPersonas.find(p => p.id === activeId) || localizedPerso
     // Chat animation state
     const [visibleMsgs, setVisibleMsgs] = useState<Message[]>([])
     const [isTyping, setIsTyping] = useState(false)
-    const chatEndRef = useRef<HTMLDivElement>(null)
+    const chatContainerRef = useRef<HTMLDivElement>(null)
 
     // Handle responsive window width
     useEffect(() => {
@@ -107,8 +107,8 @@ const activeP = localizedPersonas.find(p => p.id === activeId) || localizedPerso
     }, [activeId, activeP])
 
     useEffect(() => {
-        if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
         }
     }, [visibleMsgs, isTyping])
 
@@ -323,7 +323,11 @@ const activeP = localizedPersonas.find(p => p.id === activeId) || localizedPerso
                         </div>
 
                         {/* Chat Body */}
-                        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }} className="custom-scrollbar">
+                        <div 
+                            ref={chatContainerRef}
+                            style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }} 
+                            className="custom-scrollbar"
+                        >
                             <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 Today 3:42 AM
                             </div>
@@ -365,7 +369,6 @@ const activeP = localizedPersonas.find(p => p.id === activeId) || localizedPerso
                                     </div>
                                 </div>
                             )}
-                            <div ref={chatEndRef} />
                         </div>
 
                         {/* Custom CSS for animations embedded safely */}
