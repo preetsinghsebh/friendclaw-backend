@@ -199,7 +199,7 @@ app.use(express.json());
 app.get('/api/profile/:chatId', (req, res) => {
     const { chatId } = req.params;
     const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
-    const personaId = userPersonas.get(chatId) || 'midnight';
+    const personaId = userPersonas.get(chatId) || 'protective_bf';
     res.json({ ...profile, personaId });
 });
 
