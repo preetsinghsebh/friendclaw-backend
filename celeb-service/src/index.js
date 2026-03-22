@@ -107,12 +107,17 @@ async function clearChatHistory(chatId) {
 
 // Map persona IDs to their display names for Telegram UI updates
 const personaDisplayNames = {
+    'ziva': 'Ziva',
+    'liam': 'Liam',
+    'emma': 'Emma',
+    'confident-zane': 'Zane',
     'midnight': 'Midnight Friend',
     'listener': 'Caring Listener',
     'caring-listener': 'Caring Listener',
     'guide': 'Calm Guide',
     'calm-guide': 'Calm Guide',
-    'romantic_old': 'Aryan',
+    'sleep-luna': 'Luna (Sleep)',
+    'mindful-maya': 'Maya (Focus)',
     'crush': 'Aryan',
     'sweet_gf': 'Ziva',
     'sweetie': 'Ziva',
@@ -148,29 +153,41 @@ const personaDisplayNames = {
     'anime_luffy': 'Monkey D. Luffy',
     'luffy': 'Monkey D. Luffy',
     'anime_levi': 'Levi Ackerman',
-    'levi': 'Levi Ackerman'
+    'levi': 'Levi Ackerman',
+    'taylin-swift': 'Taylin Swift',
+    'dax-johnson': 'Dax Johnson',
+    'kain-west': 'Kain West',
+    'kendro-lamar': 'Kendro Lamar',
+    'zay-rukh': 'Zay Rukh'
 };
 
-// Map web IDs to internal IDs
 const WEB_TO_INTERNAL_ID = {
+    'ziva': 'sweet_gf',
+    'liam': 'protective_bf',
+    'emma': 'sweetie',
+    'confident-zane': 'partner',
     'sweetie': 'sweet_gf',
     'partner': 'protective_bf',
     'crush': 'romantic_old',
     'caring-listener': 'listener',
     'calm-guide': 'guide',
+    'sleep-luna': 'sleep-luna',
+    'mindful-maya': 'mindful-maya',
     'warm-grandma': 'warm_grandma',
     'caring-mom': 'caring_mom',
     'roaster': 'meme_lord',
     'bestie': 'best_friend',
     'hype': 'hype_man',
     'bua': 'jealous_bua',
-    'icon': 'selena_heart',
-    'iron': 'rock_fuel',
-    'wake': 'rock_fuel',
     'gojo': 'anime_gojo',
     'bakugo': 'anime_bakugo',
     'luffy': 'anime_luffy',
-    'levi': 'anime_levi'
+    'levi': 'anime_levi',
+    'taylin-swift': 'tay_vibe',
+    'dax-johnson': 'iron',
+    'kain-west': 'elon_spark',
+    'kendro-lamar': 'kendro-lamar',
+    'zay-rukh': 'srk_charm'
 };
 
 // Express Setup for Dashboard Sync
