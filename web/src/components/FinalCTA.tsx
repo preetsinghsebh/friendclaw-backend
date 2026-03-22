@@ -1,5 +1,8 @@
 'use client'
 import { PERSONAS } from "@/lib/personas";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
 
 export default function FinalCTA() {
     const STATS = [
@@ -8,6 +11,18 @@ export default function FinalCTA() {
         { value: PERSONAS.length.toString(), label: 'UNIQUE ICONS' },
         { value: '4.8★', label: 'USER RATING' },
     ]
+    const [user, setUser] = useState<User | null>(null)
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user || null)
+        })
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user || null)
+        })
+        return () => subscription.unsubscribe()
+    }, [])
+
     return (
         <section style={{
             backgroundColor: 'var(--bg)',
@@ -97,13 +112,15 @@ export default function FinalCTA() {
                     >
                         Start Chatting Free ✦
                     </a>
-                    <a
-                        href="/auth"
-                        className="btn-ghost"
-                        style={{ fontSize: '1.1rem', padding: '1.1rem 2.5rem' }}
-                    >
-                        Sign Up on Web →
-                    </a>
+                    {!user && (
+                        <a
+                            href="/auth"
+                            className="btn-ghost"
+                            style={{ fontSize: '1.1rem', padding: '1.1rem 2.5rem' }}
+                        >
+                            Sign Up on Web →
+                        </a>
+                    )}
                 </div>
 
                 {/* Trust note */}

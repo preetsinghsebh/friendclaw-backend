@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Timer, Zap } from 'lucide-react'
+import { Timer, Zap, LogOut, User as UserIcon } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { User } from '@supabase/supabase-js'
 
 const NAV_LINKS = [
   { label: 'Friends', href: '#experiences' },
@@ -14,6 +16,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null)
 
   // Set launch date to March 21, 2026
@@ -23,6 +26,16 @@ export default function Navbar() {
   const FINAL_END_DATE = new Date(LAUNCH_DATE.getTime() + TOTAL_DAYS * 24 * 60 * 60 * 1000)
 
   useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null)
+    })
+
     const onScroll = () => setScrolled(window.scrollY > 20)
     const checkMobile = () => setIsMobile(window.innerWidth <= 768)
 
@@ -61,9 +74,15 @@ export default function Navbar() {
     return () => {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', checkMobile)
+      subscription.unsubscribe()
       clearInterval(timer)
     }
   }, [])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
 
   return (
     <>
@@ -165,21 +184,25 @@ export default function Navbar() {
 
             {!isMobile ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
-                <a
-                  href="/auth"
-                  style={{
-                    fontFamily: 'var(--font-ui)',
-                    fontSize: '0.85rem',
-                    color: 'rgba(255,255,255,0.7)',
-                    fontWeight: 600,
-                    transition: 'color 0.2s',
-                    marginRight: '0.5rem',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
-                >
-                  Sign In
-                </a>
+                {user ? (
+                   <div style={{ paddingRight: '1rem' }} /> // Spacer instead of Sign In
+                ) : (
+                  <a
+                    href="/auth"
+                    style={{
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: '0.85rem',
+                      color: 'rgba(255,255,255,0.7)',
+                      fontWeight: 600,
+                      transition: 'color 0.2s',
+                      marginRight: '0.5rem',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+                  >
+                    Sign In
+                  </a>
+                )}
                 <a
                   href="#experiences"
                   className="rc-nav-links btn-gold"
@@ -195,7 +218,9 @@ export default function Navbar() {
               </div>
             ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <a href="/auth" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Sign In</a>
+                    {!user && (
+                        <a href="/auth" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Sign In</a>
+                    )}
                     <button
                         className="rc-nav-mobile-toggle"
                         onClick={() => setMenuOpen(!menuOpen)}

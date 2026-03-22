@@ -16,7 +16,12 @@ import Chat from '../../shared/models/Chat.js';
 const log = (module, msg) => console.log(`[${new Date().toISOString()}] [${module}] ${msg}`);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+if (PROXY_URL && !PROXY_URL.startsWith('http')) PROXY_URL = `http://${PROXY_URL}`;
+if (PROXY_URL && !PROXY_URL.includes('/v1/chat/completions')) {
+    PROXY_URL = PROXY_URL.endsWith('/') ? `${PROXY_URL}v1/chat/completions` : `${PROXY_URL}/v1/chat/completions`;
+}
+log('System', `Using Proxy: ${PROXY_URL}`);
 
 if (!token) {
     console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing in .env');
@@ -648,11 +653,25 @@ bot.on('message', async (msg) => {
             const personaId = userPersonas.get(chatId) || 'midnight';
             safeSendMessage(chatId, "🔮 *Decoding your dream...*", { parse_mode: 'Markdown' });
 
-            const prompt = "I'm returning from the Dreamscape portal. Interpret my latest dream for me in your character style. Be mystical.";
+            const prompt = "I'm returning from the Dreamscape portal. Interpretation Request: Interpret my latest dream for me in your character style. Be mystical.";
             const response = await getCharacterResponse(personaId, prompt, false, chatId);
             saveToHistory(chatId, 'assistant', response);
             await sendHumanizedResponse(chatId, `🌙 *Dreamscape:* ${response}`, personaId);
             return;
+        } else if (!startParam) {
+            // STANDALONE BOT GREETING (No parameters, just pure /start)
+            log(`TG-${chatId}`, `Pure /start detected. Triggering Chaos greeting.`);
+            const personaId = userPersonas.get(chatId) || 'midnight';
+            try {
+                const greetPrompt = "This is the very first time you're meeting this user. Greet them warmly and in-character. Keep it short, casual, and natural — like a real person saying hi for the first time. 1-2 sentences max.";
+                const welcome = await getCharacterResponse(personaId, greetPrompt, false);
+                if (welcome && welcome.trim()) {
+                    await sendHumanizedResponse(chatId, enforceSafetyLayer("", welcome), personaId);
+                }
+            } catch (e) {
+                log(`TG-${chatId}`, `Greeting generation failed: ${e.message}`);
+                safeSendMessage(chatId, "Hey! 👋 I'm your Chaos Companion. What's on your mind?"); // Fallback
+            }
         }
 
         return;
@@ -663,7 +682,7 @@ bot.on('message', async (msg) => {
         const subCommand = parts[1];
 
         if (subCommand === 'list') {
-            safeSendMessage(chatId, "Available Personas:\n- `midnight` (2am Friend)\n- `jealous_bua` (The Toxic Relative)\n- `meme_lord` (Savage Roaster)\n- `sweet_gf` (Romantic Partner)\n- `chill_chacha` (The Unbothered Uncle)\n- `hype_man` (Motivation Machine)\n\nTry `/persona <id>`!");
+            safeSendMessage(chatId, "Available Personas:\n- `midnight` (2am Friend)\n- `roaster` (Savage Roaster)\n- `bestie` (Gossip-driven)\n- `hype` (Motivation Machine)\n\nTry `/persona <id>`!");
         } else if (subCommand === 'sub') {
             const isSub = !userSubscriptions.get(chatId);
             userSubscriptions.set(chatId, isSub);

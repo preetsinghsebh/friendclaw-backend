@@ -16,7 +16,13 @@ import Chat from '../../shared/models/Chat.js';
 const log = (module, msg) => console.log(`[${new Date().toISOString()}] [${module}] ${msg}`);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+if (PROXY_URL && !PROXY_URL.startsWith('http')) {
+    PROXY_URL = `http://${PROXY_URL}`;
+}
+if (PROXY_URL && !PROXY_URL.endsWith('/v1/chat/completions')) {
+    PROXY_URL = PROXY_URL.endsWith('/') ? `${PROXY_URL}v1/chat/completions` : `${PROXY_URL}/v1/chat/completions`;
+}
 
 if (!token) {
     console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing in .env');
@@ -652,9 +658,24 @@ bot.on('message', async (msg) => {
             saveToHistory(chatId, 'assistant', response);
             await sendHumanizedResponse(chatId, `🌙 *Dreamscape:* ${response}`, personaId);
             return;
+        } else {
+            // STANDALONE BOT GREETING (No parameters, just pure /start)
+            log(`TG-${chatId}`, `Pure /start detected. Triggering default greeting.`);
+            const defaultPersona = 'calm-guide';
+            userPersonas.set(chatId, defaultPersona);
+            
+            try {
+                const greetPrompt = "This is the very first time you're meeting this user. Greet them warmly and in-character. Keep it short, casual, and natural. 1-2 sentences max.";
+                const welcome = await getCharacterResponse(defaultPersona, greetPrompt, false);
+                if (welcome && welcome.trim()) {
+                    await sendHumanizedResponse(chatId, enforceSafetyLayer("", welcome), defaultPersona);
+                }
+                return;
+            } catch (e) {
+                log(`TG-${chatId}`, `Default welcome failed: ${e.message}`);
+                return bot.sendMessage(chatId, "Hey! I'm here. How can I help you today?");
+            }
         }
-
-        return;
     }
 
     if (text.startsWith('/persona') || text.startsWith('/summon')) {
@@ -662,7 +683,7 @@ bot.on('message', async (msg) => {
         const subCommand = parts[1];
 
         if (subCommand === 'list') {
-            safeSendMessage(chatId, "Available Personas:\n- `midnight` (2am Friend)\n- `jealous_bua` (The Toxic Relative)\n- `meme_lord` (Savage Roaster)\n- `sweet_gf` (Romantic Partner)\n- `chill_chacha` (The Unbothered Uncle)\n- `hype_man` (Motivation Machine)\n\nTry `/persona <id>`!");
+            safeSendMessage(chatId, "Available Mind Reset Personas:\n- `calm-guide` (Steady Presence)\n- `listener` (Deep Empathy)\n- `mindful-maya` (Clarity & Focus)\n\nTry `/persona <id>`!");
         } else if (subCommand === 'sub') {
             const isSub = !userSubscriptions.get(chatId);
             userSubscriptions.set(chatId, isSub);

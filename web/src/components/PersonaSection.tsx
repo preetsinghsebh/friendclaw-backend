@@ -3,6 +3,8 @@ import { getTelegramLink } from "@/lib/telegram";
 import React, { useState, useEffect, useRef } from 'react'
 import { PERSONAS, PersonaData, SAFE_SPACE_LOCALIZATION, Message } from "@/lib/personas";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { supabase } from "@/lib/supabase";
+import { User } from "@supabase/supabase-js";
 
 // --- SVGs ---
 const BackIcon = () => (
@@ -23,6 +25,7 @@ const PERSONAS_BASE = PERSONAS;
 
 export default function PersonaSection() {
     const [userCountry, setUserCountry] = useState<string | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const { trackEvent } = useAnalytics();
 
     useEffect(() => {
@@ -30,6 +33,17 @@ export default function PersonaSection() {
             .then(res => res.json())
             .then(data => setUserCountry(data.country))
             .catch(() => setUserCountry('US'));
+
+        // Check for session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user || null);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user || null);
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const localizedPersonas = React.useMemo(() => {
@@ -384,7 +398,7 @@ const activeP = localizedPersonas.find(p => p.id === activeId) || localizedPerso
 
                         {/* Chat Footer CTA */}
                              <a
-                                href={`/auth?personaId=${activeP.id}`}
+                                href={user ? getTelegramLink(activeP.id) : `/auth?personaId=${activeP.id}`}
                                 onClick={() => trackEvent('telegram_chat_start', { personaId: activeP.id, category: activeP.category })}
                                 style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',

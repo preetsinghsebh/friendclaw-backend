@@ -16,7 +16,13 @@ import Chat from '../../shared/models/Chat.js';
 const log = (module, msg) => console.log(`[${new Date().toISOString()}] [${module}] ${msg}`);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+if (PROXY_URL && !PROXY_URL.startsWith('http')) {
+    PROXY_URL = `http://${PROXY_URL}`;
+}
+if (PROXY_URL && !PROXY_URL.endsWith('/v1/chat/completions')) {
+    PROXY_URL = PROXY_URL.endsWith('/') ? `${PROXY_URL}v1/chat/completions` : `${PROXY_URL}/v1/chat/completions`;
+}
 
 if (!token) {
     console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing in .env');
@@ -678,7 +684,8 @@ bot.on('message', async (msg) => {
         } else if (!startParam) {
             // STANDALONE BOT GREETING (No parameters, just pure /start)
             log(`TG-${chatId}`, `Pure /start detected. Triggering Ziva greeting.`);
-            const personaId = 'sweet_gf';
+            const personaId = 'sweetie';
+            userPersonas.set(chatId, personaId);
             try {
                 const greetPrompt = "This is the very first time you're meeting this user. Greet them warmly and in-character. Keep it short, casual, and natural — like a real person saying hi for the first time. 1-2 sentences max.";
                 const welcome = await getCharacterResponse(personaId, greetPrompt, false);
@@ -699,7 +706,7 @@ bot.on('message', async (msg) => {
         const subCommand = parts[1];
 
         if (subCommand === 'list') {
-            safeSendMessage(chatId, "Available Personas:\n- `midnight` (2am Friend)\n- `jealous_bua` (The Toxic Relative)\n- `meme_lord` (Savage Roaster)\n- `sweet_gf` (Romantic Partner)\n- `chill_chacha` (The Unbothered Uncle)\n- `hype_man` (Motivation Machine)\n\nTry `/persona <id>`!");
+            safeSendMessage(chatId, "Available Relationship Personas:\n- `sweetie` (Ziva - Sweet Girlfriend)\n- `partner` (Liam - Protective Partner)\n- `flirty-stranger` (Emma - Curious Stranger)\n- `confident-zane` (Zane - Confident Lover)\n\nTry `/persona <id>`!");
         } else if (subCommand === 'sub') {
             const isSub = !userSubscriptions.get(chatId);
             userSubscriptions.set(chatId, isSub);
@@ -722,7 +729,7 @@ bot.on('message', async (msg) => {
 
     // 3. Inference via Sarvam Proxy
     try {
-        const personaId = 'flirty-stranger'; // HARDCODED FOR DEDICATED EMMA BOT
+        const personaId = userPersonas.get(chatId) || 'sweetie';
 
         // STICKER REACTION (4% chance)
         if (Math.random() < 0.04) {

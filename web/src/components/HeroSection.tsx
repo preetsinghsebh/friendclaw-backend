@@ -2,6 +2,8 @@
 import Image from 'next/image'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Zap } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { User } from '@supabase/supabase-js'
 
 const BADGES = [
     { icon: '🧸', label: 'Ziva', color: '#FF69B4' },
@@ -40,6 +42,7 @@ export default function HeroSection() {
     const [wordVisible, setWordVisible] = useState(true)
     const [scrollY, setScrollY] = useState(0)
     const [countStarted, setCountStarted] = useState(false)
+    const [user, setUser] = useState<User | null>(null)
     const heroRef = useRef<HTMLElement>(null)
     const statRef = useRef<HTMLDivElement>(null)
 
@@ -50,7 +53,19 @@ export default function HeroSection() {
         const checkMobile = () => setIsMobile(window.innerWidth <= 768)
         checkMobile()
         window.addEventListener('resize', checkMobile)
-        return () => window.removeEventListener('resize', checkMobile)
+
+        // Check session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setUser(session?.user || null)
+        })
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user || null)
+        })
+
+        return () => {
+            window.removeEventListener('resize', checkMobile)
+            subscription.unsubscribe()
+        }
     }, [])
 
     // Word cycle
@@ -223,7 +238,7 @@ export default function HeroSection() {
                         >
                             Join the BuddyClaw Circle
                         </a>
-                        {!isMobile && (
+                        {!isMobile && !user && (
                             <a
                                 href="/auth"
                                 className="btn-glass"

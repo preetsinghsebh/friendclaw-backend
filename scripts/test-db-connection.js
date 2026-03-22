@@ -22,7 +22,7 @@ async function testConnection() {
 
     try {
         await mongoose.connect(uri);
-        console.log('✅ SUCCESS! Your project is now connected to the Cloud "FRIENDCLAW" database.');
+        console.log('✅ SUCCESS! Your project is now connected to the Cloud "BuddyClaw" database.');
         
         // Check collections
         const collections = await mongoose.connection.db.listCollections().toArray();

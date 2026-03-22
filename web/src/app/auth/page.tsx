@@ -24,6 +24,7 @@ function AuthForm() {
     const [otp, setOtp] = useState("");
     const [is18Plus, setIs18Plus] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
 
@@ -41,10 +42,13 @@ function AuthForm() {
                 const effectivePersonaId = personaId || localStorage.getItem("pendingPersonaId");
                 
                 if (effectivePersonaId) {
+                    setIsSuccess(true);
                     localStorage.removeItem("pendingPersonaId"); // Clean up
-                    window.location.href = getTelegramLink(effectivePersonaId);
+                    setTimeout(() => {
+                        window.location.href = getTelegramLink(effectivePersonaId);
+                    }, 1500);
                 } else {
-                    router.push("/customize");
+                    router.push("/");
                 }
             }
         };
@@ -56,10 +60,13 @@ function AuthForm() {
                 const effectivePersonaId = personaId || localStorage.getItem("pendingPersonaId");
                 
                 if (effectivePersonaId) {
+                    setIsSuccess(true);
                     localStorage.removeItem("pendingPersonaId"); // Clean up
-                    window.location.href = getTelegramLink(effectivePersonaId);
+                    setTimeout(() => {
+                        window.location.href = getTelegramLink(effectivePersonaId);
+                    }, 1500);
                 } else {
-                    router.push("/customize");
+                    router.push("/");
                 }
             }
         });
@@ -139,19 +146,29 @@ function AuthForm() {
                     {persona ? `Join BuddyClaw to chat with ${persona.name}` : "Join BuddyClaw"}
                 </h1>
                 <p className="text-gray-400 font-inter text-sm">
-                    {persona 
-                        ? `Sign up for free unlimited chats with ${persona.name}. Your 2am companion is waiting.`
-                        : "Your 2am companion is waiting for you. Sign in or create an account to continue."}
+                    {isSuccess 
+                        ? "Authentication successful! Opening your chat in Telegram..."
+                        : (persona 
+                            ? `Sign up for free unlimited chats with ${persona.name}. Your 2am companion is waiting.`
+                            : "Your 2am companion is waiting for you. Sign in or create an account to continue.")}
                 </p>
             </div>
 
-            {error && (
+            {isSuccess && (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                    <div className="w-16 h-16 border-4 border-t-[hsl(var(--accent-pink))] border-white/10 rounded-full animate-spin" />
+                    <p className="text-white font-medium">Redirecting to Telegram...</p>
+                </div>
+            )}
+
+            {!isSuccess && error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium animate-shake">
                     {error}
                 </div>
             )}
 
-            <AnimatePresence mode="wait">
+            {!isSuccess && (
+                <AnimatePresence mode="wait">
                 {step === "identifier" ? (
                     <motion.form
                         key="identifier-form"
@@ -284,7 +301,8 @@ function AuthForm() {
                         </div>
                     </motion.form>
                 )}
-            </AnimatePresence>
+                </AnimatePresence>
+            )}
         </motion.div>
     );
 }
