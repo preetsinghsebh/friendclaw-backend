@@ -199,7 +199,7 @@ app.use(express.json());
 app.get('/api/profile/:chatId', (req, res) => {
     const { chatId } = req.params;
     const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
-    const personaId = userPersonas.get(chatId) || 'midnight';
+    const personaId = userPersonas.get(chatId) || 'sweet_gf';
     res.json({ ...profile, personaId });
 });
 
@@ -748,7 +748,7 @@ bot.on('message', async (msg) => {
 
     // 3. Inference via Sarvam Proxy
     try {
-        const personaId = userPersonas.get(chatId) || 'sweetie';
+        const personaId = userPersonas.get(chatId) || 'sweet_gf';
 
         // STICKER REACTION (4% chance)
         if (Math.random() < 0.04) {

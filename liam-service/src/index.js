@@ -741,7 +741,7 @@ bot.on('message', async (msg) => {
 
     // 3. Inference via Sarvam Proxy
     try {
-        const personaId = userPersonas.get(chatId) || 'partner';
+        const personaId = userPersonas.get(chatId) || 'protective_bf';
 
         // STICKER REACTION (4% chance)
         if (Math.random() < 0.04) {
