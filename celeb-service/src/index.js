@@ -625,23 +625,12 @@ bot.on('message', async (msg) => {
 
             log(`TG-${chatId}`, `Deep link switch to: ${requestedPersona}`);
 
-            // Try updating the bot's global name to match the persona
             try {
-                const newName = personaDisplayNames[requestedPersona] || "Real Companion";
-                await fetch(`https://api.telegram.org/bot${token}/setMyName`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName })
-                });
-                log(`TG-${chatId}`, `Set bot name to: ${newName}`);
-            } catch (nameErr) {
-                log(`TG-${chatId}`, `Failed to set name: ${nameErr.message}`);
-            }
+                // Determine display name for greeting
+                const displayName = personaDisplayNames[requestedPersona] || requestedPersona;
 
-
-            try {
                 // Ask LLM for a proper first greeting (not a nudge scenario)
-                const greetPrompt = "This is the very first time you're meeting this user. Greet them warmly and in-character. IMPORTANT: You MUST reply in ENGLISH for this first message. Keep it short, casual, and natural — like a real person saying hi for the first time. 1-2 sentences max.";
+                const greetPrompt = `This is the very first time you're meeting this user. You are ${displayName}. Greet them warmly and in-character, making sure to introduce yourself by name if it feels natural. IMPORTANT: You MUST reply in ENGLISH for this first message. Keep it short, casual, and natural — like a real person saying hi for the first time. 1-2 sentences max.`;
                 const welcome = await getCharacterResponse(requestedPersona, greetPrompt, false);
                 if (welcome && welcome.trim()) {
                     await sendHumanizedResponse(chatId, enforceSafetyLayer("", welcome), requestedPersona);
