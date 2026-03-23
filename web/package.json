@@ -1,7 +1,7 @@
 {
   "name": "web",
   "version": "0.1.0",
-  "private": true,
+  "description": "BuddyClaw Frontend: Next.js web interface for AI companion interactions.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
