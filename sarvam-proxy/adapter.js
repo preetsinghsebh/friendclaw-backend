@@ -9,6 +9,9 @@ require('../shared/env.cjs');
 const app = express();
 app.use(express.json());
 
+// --- Health Check for Render ---
+app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', service: 'sarvam-proxy', timestamp: new Date().toISOString() }));
+
 // --- Persona System Prompts ---
 const PERSONA_PROMPTS = {
     // CATEGORY: LOVE & DRAMA ❤️
