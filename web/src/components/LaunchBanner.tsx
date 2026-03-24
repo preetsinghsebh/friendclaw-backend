@@ -88,6 +88,10 @@ export default function LaunchBanner() {
                 </a>
             </div>
             
+            <div className="text-center text-white/60 text-[10px] pb-1 tracking-wide">
+                ☕ First message? Give companions ~30s to wake up — they rest when idle to stay free!
+            </div>
+
             <style jsx global>{`
                 @keyframes gradient-x {
                     0% { background-position: 0% 50%; }

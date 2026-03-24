@@ -35,6 +35,11 @@ await connectDB();
 log('System', 'Telegram Bot Orchestrator live.');
 const bot = new TelegramBot(token, { polling: true });
 
+// Track service start time to detect cold-start wake-ups
+const SERVICE_START_TIME = Date.now();
+const WARMUP_WINDOW_MS = 90_000;
+const warnedUsers = new Set();
+
 // State to track current persona, activity, and memory (Persisted via MongoDB)
 const userPersonas = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
 const userActivity = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
@@ -615,6 +620,12 @@ bot.on('message', async (msg) => {
     // Track activity
     userActivity.set(chatId, Date.now());
     trackMessage(chatId, msg.message_id);
+
+    // 🌅 Cold-start wake-up notification
+    if (Date.now() - SERVICE_START_TIME < WARMUP_WINDOW_MS && !warnedUsers.has(chatId)) {
+        warnedUsers.add(chatId);
+        await safeSendMessage(chatId, `☕ *Just waking up!*\n\nI was resting to save energy. Give me a few seconds to get ready — I'll reply right after! 🌸`, { parse_mode: 'Markdown' });
+    }
 
     // Update Chat History (LLM Context)
     if (!text.startsWith('/')) {
