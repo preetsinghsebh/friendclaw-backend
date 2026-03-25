@@ -11,6 +11,7 @@ import { connectDB } from '../../shared/database.js';
 import { apiLimiter, verifyInternalToken } from '../../shared/security.js';
 import User from '../../shared/models/User.js';
 import Memory from '../../shared/models/Memory.js';
+import Chat from '../../shared/models/Chat.js';
 // Setup production-grade telemetry
 const telemetry = new Telemetry('ziva');
 const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
