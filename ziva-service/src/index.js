@@ -11,54 +11,27 @@ import { connectDB } from '../../shared/database.js';
 import { apiLimiter, verifyInternalToken } from '../../shared/security.js';
 import User from '../../shared/models/User.js';
 import Memory from '../../shared/models/Memory.js';
-import Chat from '../../shared/models/Chat.js';
-
 // Setup production-grade telemetry
 const telemetry = new Telemetry('ziva');
 const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+let bot;
+let userPersonas, userActivity, userMemories, userProfiles, userSubscriptions, userMessageHistory, userChatHistory, anchorMemories;
+let PROXY_URL;
 
-// 1. Ensure protocol
-if (PROXY_URL && !PROXY_URL.startsWith('http')) {
-    PROXY_URL = `http://${PROXY_URL}`;
-}
-
-// 2. Parse and fix port/hostname/path
-try {
-    const parsed = new URL(PROXY_URL);
-    // If it's a Render internal host and no port is specified, default to 3000
-    if ((parsed.hostname.includes('sarvam-proxy') || parsed.hostname === 'localhost') && !parsed.port) {
-        parsed.port = '3000';
+export async function init(sharedApp = null) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+    if (!token) {
+        console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing');
+        return;
     }
-    // Ensure the path is correct
-    if (!parsed.pathname || parsed.pathname === '/') {
-        parsed.pathname = '/v1/chat/completions';
-    }
-    PROXY_URL = parsed.toString();
-} catch (e) {
-    // Basic fallback if URL parsing fails
-    if (PROXY_URL && !PROXY_URL.includes(':') && PROXY_URL.includes('sarvam-proxy')) {
-        PROXY_URL = PROXY_URL.replace(/sarvam-proxy(-[a-z0-9]+)?/i, '$&:3000');
-    }
-}
 
-log('System', `Using Proxy: ${PROXY_URL}`);
-
-if (!token) {
-    console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing in .env');
-    process.exit(1);
-}
-
-if (PROXY_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
-    console.error('WARNING: SARVAM_PROXY_URL is not set — falling back to localhost which will FAIL on Render. Set SARVAM_PROXY_URL in environment variables.');
-}
-
-log('System', 'Telegram Bot Orchestrator starting...');
-await connectDB();
-log('System', 'Telegram Bot Orchestrator live.');
-const bot = new TelegramBot(token, { polling: true });
+    log('System', 'Telegram Bot Orchestrator starting...');
+    // Note: Database connection is handled by the master service
+    log('System', 'Telegram Bot Orchestrator live.');
+    
+    bot = new TelegramBot(token, { polling: true });
 
 // Track service start time to detect cold-start wake-ups
 const SERVICE_START_TIME = Date.now();
@@ -66,16 +39,15 @@ const WARMUP_WINDOW_MS = 90_000; // 90 seconds after start = cold start window
 const warnedUsers = new Set(); // Only warn each user once per cold start
 
 
-// State to track current persona, activity, and memory (Persisted via MongoDB)
-const userPersonas = new PersistentMap(User, { mode: 'mongo', service: 'ziva' });
-const userActivity = new PersistentMap(User, { mode: 'mongo', service: 'ziva' });
-const userMemories = new PersistentMap(Memory, { mode: 'mongo', service: 'ziva' });
-const userProfiles = new PersistentMap(User, { mode: 'mongo', service: 'ziva' }); 
-const userSubscriptions = new PersistentMap(User, { mode: 'mongo', service: 'ziva' }); 
-const pendingReplies = new Map(); // Not persisted (transient)
-const userMessageHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'ziva' }); 
-const userChatHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'ziva' }); 
-const anchorMemories = new VectorMemory(Memory, { mode: 'mongo', service: 'ziva' });
+    // State to track current persona, activity, and memory (Persisted via MongoDB)
+    userPersonas = new PersistentMap(User, { mode: 'mongo', service: 'ziva' });
+    userActivity = new PersistentMap(User, { mode: 'mongo', service: 'ziva' });
+    userMemories = new PersistentMap(Memory, { mode: 'mongo', service: 'ziva' });
+    userProfiles = new PersistentMap(User, { mode: 'mongo', service: 'ziva' }); 
+    userSubscriptions = new PersistentMap(User, { mode: 'mongo', service: 'ziva' }); 
+    userMessageHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'ziva' }); 
+    userChatHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'ziva' }); 
+    anchorMemories = new VectorMemory(Memory, { mode: 'mongo', service: 'ziva' });
 
 /**
  * Tracks a message ID for later cleanup
@@ -223,23 +195,32 @@ const WEB_TO_INTERNAL_ID = {
     'naruto': 'anime_naruto'
 };
 
-// Express Setup for Dashboard Sync
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(apiLimiter); // Apply rate limiting to all routes
+    // Express Setup for Dashboard Sync
+    const router = express.Router();
+    router.use(cors());
+    router.use(express.json());
+    router.use(apiLimiter);
 
-// Health Check for Render
-app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', service: 'ziva', timestamp: new Date().toISOString() }));
+    // Health Check
+    router.get('/health', (req, res) => res.status(200).json({ status: 'healthy', service: 'ziva', timestamp: new Date().toISOString() }));
 
-app.get('/api/profile/:chatId', verifyInternalToken, (req, res) => {
-    const { chatId } = req.params;
-    const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
-    const personaId = userPersonas.get(chatId) || 'sweet_gf';
-    res.json({ ...profile, personaId });
-});
+    router.get('/api/profile/:chatId', verifyInternalToken, (req, res) => {
+        const { chatId } = req.params;
+        const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
+        const personaId = userPersonas.get(chatId) || 'sweet_gf';
+        res.json({ ...profile, personaId });
+    });
 
-app.listen(3006, () => log('API', 'Profile Sync Server listening on port 3006'));
+    if (sharedApp) {
+        sharedApp.use('/ziva', router);
+        log('API', 'Ziva Profile Sync mounted to /ziva');
+    } else {
+        const port = process.env.PORT || 3006;
+        const app = express();
+        app.use('/ziva', router);
+        app.listen(port, () => log('API', `Profile Sync Server listening on port ${port}`));
+    }
+}
 
 /**
  * Helper to get current Indian Standard Time (IST) formatted

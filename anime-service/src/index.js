@@ -14,11 +14,17 @@ import Memory from '../../shared/models/Memory.js';
 import Chat from '../../shared/models/Chat.js';
 
 // Setup production-grade telemetry
+// Setup production-grade telemetry
 const telemetry = new Telemetry('anime');
 const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+let bot;
+let userPersonas, userActivity, userProfiles, userSubscriptions, userMessageHistory, userChatHistory, userMemories, anchorMemories;
+let PROXY_URL;
+
+export async function init(sharedApp = null) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
 
 // 1. Ensure protocol
 if (PROXY_URL && !PROXY_URL.startsWith('http')) {
@@ -53,190 +59,53 @@ if (PROXY_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
     console.error('WARNING: SARVAM_PROXY_URL is not set — falling back to localhost which will FAIL on Render. Set SARVAM_PROXY_URL in environment variables.');
 }
 
-log('System', 'Telegram Bot Orchestrator starting...');
-await connectDB();
-log('System', 'Telegram Bot Orchestrator live.');
-const bot = new TelegramBot(token, { polling: true });
+    log('System', 'Telegram Bot Orchestrator starting...');
+    // Note: Database connection is handled by the master service
+    log('System', 'Telegram Bot Orchestrator live.');
+    
+    bot = new TelegramBot(token, { polling: true });
 
 // Track service start time to detect cold-start wake-ups
 const SERVICE_START_TIME = Date.now();
 const WARMUP_WINDOW_MS = 90_000;
 const warnedUsers = new Set();
 
-// State to track current persona, activity, and memory (Persisted via MongoDB)
-const userPersonas = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
-const userActivity = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
-const userProfiles = new PersistentMap(User, { mode: 'mongo', service: 'anime' }); 
-const userSubscriptions = new PersistentMap(User, { mode: 'mongo', service: 'anime' }); 
-const pendingReplies = new Map(); // Not persisted (transient)
-const userMessageHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'anime' }); 
-const userChatHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'anime' }); 
-const userMemories = new PersistentMap(Memory, { mode: 'mongo', service: 'anime' });
-const anchorMemories = new VectorMemory(Memory, { mode: 'mongo', service: 'anime' });
+    // State to track current persona, activity, and memory (Persisted via MongoDB)
+    userPersonas = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
+    userActivity = new PersistentMap(User, { mode: 'mongo', service: 'anime' });
+    userProfiles = new PersistentMap(User, { mode: 'mongo', service: 'anime' }); 
+    userSubscriptions = new PersistentMap(User, { mode: 'mongo', service: 'anime' }); 
+    userMessageHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'anime' }); 
+    userChatHistory = new PersistentMap(Chat, { mode: 'mongo', service: 'anime' }); 
+    userMemories = new PersistentMap(Memory, { mode: 'mongo', service: 'anime' });
+    anchorMemories = new VectorMemory(Memory, { mode: 'mongo', service: 'anime' });
+    
+    // Express Setup for Dashboard Sync
+    const router = express.Router();
+    router.use(cors());
+    router.use(express.json());
+    router.use(apiLimiter);
 
-/**
- * Tracks a message ID for later cleanup
- */
-function trackMessage(chatId, messageId) {
-    if (!messageId) return;
-    const history = userMessageHistory.get(chatId) || [];
-    history.push(messageId);
-    // Keep history manageable (e.g. last 50 messages)
-    if (history.length > 50) history.shift();
-    userMessageHistory.set(chatId, history);
-}
+    // Health Check
+    router.get('/health', (req, res) => res.status(200).json({ status: 'healthy', service: 'anime', timestamp: new Date().toISOString() }));
 
-/**
- * Wrapper for bot.sendMessage to enable tracking
- */
-async function safeSendMessage(chatId, text, options = {}) {
-    try {
-        const msg = await bot.sendMessage(chatId, text, options);
-        trackMessage(chatId, msg.message_id);
-        return msg;
-    } catch (e) {
-        log(`TG-${chatId}`, `safeSendMessage Error: ${e.message}`);
-        throw e;
+    router.get('/api/profile/:chatId', verifyInternalToken, (req, res) => {
+        const { chatId } = req.params;
+        const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
+        const personaId = userPersonas.get(chatId) || 'midnight';
+        res.json({ ...profile, personaId });
+    });
+
+    if (sharedApp) {
+        sharedApp.use('/anime', router);
+        log('API', 'Anime Profile Sync mounted to /anime');
+    } else {
+        const port = process.env.PORT || 3008;
+        const app = express();
+        app.use('/anime', router);
+        app.listen(port, () => log('API', `Profile Sync Server listening on port ${port}`));
     }
 }
-
-/**
- * Updates the conversation history for LLM context
- */
-function saveToHistory(chatId, role, content) {
-    if (!chatId || !content) return;
-    const history = userChatHistory.get(chatId) || [];
-    history.push({ role, content });
-    // Keep last 15 messages for context
-    if (history.length > 15) history.shift();
-    userChatHistory.set(chatId, history);
-}
-
-/**
- * Cleanup Utility: Attempts to delete up to N recent messages for a 'fresh start' feel
- */
-async function clearChatHistory(chatId) {
-    const history = userMessageHistory.get(chatId) || [];
-    if (history.length === 0) return;
-
-    log(`TG-${chatId}`, `Cleaning up ${history.length} messages for visual reset...`);
-
-    // Attempt to delete messages in parallel
-    const deletePromises = history.map(msgId =>
-        bot.deleteMessage(chatId, msgId).catch(err => {
-            // Silently fail if message is too old or already deleted
-            // log(`TG-${chatId}`, `Delete failed for ${msgId}: ${err.message}`);
-        })
-    );
-
-    await Promise.all(deletePromises);
-    userMessageHistory.set(chatId, []); // Reset history tracker
-}
-
-// Map persona IDs to their display names for Telegram UI updates
-const personaDisplayNames = {
-    'ziva': 'Ziva',
-    'liam': 'Liam',
-    'emma': 'Emma',
-    'confident-zane': 'Zane',
-    'midnight': 'Midnight Friend',
-    'listener': 'Caring Listener',
-    'caring-listener': 'Caring Listener',
-    'guide': 'Calm Guide',
-    'calm-guide': 'Calm Guide',
-    'sleep-luna': 'Luna (Sleep)',
-    'mindful-maya': 'Maya (Focus)',
-    'crush': 'Aryan',
-    'sweet_gf': 'Ziva',
-    'sweetie': 'Ziva',
-    'protective_bf': 'Liam',
-    'partner': 'Liam',
-    'jealous_bua': 'Bua Ji',
-    'bua': 'Bua Ji',
-    'chill_chacha': 'Chill Chacha',
-    'late_night_dadi': 'Dadi',
-    'warm_grandma': 'Nani Ji',
-    'warm-grandma': 'Nani Ji',
-    'caring_mom': 'Caring Mom',
-    'caring-mom': 'Caring Mom',
-    'big_brother': 'Veer',
-    'big_sister': 'Sis',
-    'fun_aunt': 'Cool Auntie',
-    'meme_lord': 'Roaster Bestie',
-    'roaster': 'Roaster Bestie',
-    'party_bestie': 'Party Friend',
-    'bestie': 'Bestie',
-    'whimsical': 'Dream Friend',
-    'hype_man': 'Hype Man',
-    'hype': 'Hype Man',
-    'conspiracy': 'Tinfoil Friend',
-    'best_friend': 'Bestie',
-    'icon': 'Icon',
-    'iron': 'Iron',
-    'wake': 'Wake',
-    'anime_gojo': 'Satoru Gojo',
-    'gojo': 'Satoru Gojo',
-    'anime_bakugo': 'Katsuki Bakugo',
-    'bakugo': 'Katsuki Bakugo',
-    'anime_luffy': 'Monkey D. Luffy',
-    'luffy': 'Monkey D. Luffy',
-    'anime_levi': 'Levi Ackerman',
-    'levi': 'Levi Ackerman',
-    'taylin-swift': 'Taylin Swift',
-    'dax-johnson': 'Dax Johnson',
-    'kain-west': 'Kain West',
-    'kendro-lamar': 'Kendro Lamar',
-    'zay-rukh': 'Zay Rukh',
-    'naruto': 'Naruto Uzumaki'
-};
-
-const WEB_TO_INTERNAL_ID = {
-    'ziva': 'sweet_gf',
-    'liam': 'protective_bf',
-    'emma': 'sweetie',
-    'confident-zane': 'partner',
-    'sweetie': 'sweet_gf',
-    'partner': 'protective_bf',
-    'crush': 'romantic_old',
-    'caring-listener': 'listener',
-    'calm-guide': 'guide',
-    'sleep-luna': 'sleep-luna',
-    'mindful-maya': 'mindful-maya',
-    'warm-grandma': 'warm_grandma',
-    'caring-mom': 'caring_mom',
-    'roaster': 'meme_lord',
-    'bestie': 'best_friend',
-    'hype': 'hype_man',
-    'bua': 'jealous_bua',
-    'gojo': 'anime_gojo',
-    'bakugo': 'anime_bakugo',
-    'luffy': 'anime_luffy',
-    'levi': 'anime_levi',
-    'taylin-swift': 'tay_vibe',
-    'dax-johnson': 'iron',
-    'kain-west': 'elon_spark',
-    'kendro-lamar': 'kendro-lamar',
-    'zay-rukh': 'srk_charm',
-    'naruto': 'anime_naruto'
-};
-
-// Express Setup for Dashboard Sync
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(apiLimiter); // Apply rate limiting to all routes
-
-// Health Check for Render
-app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', service: 'anime', timestamp: new Date().toISOString() }));
-
-app.get('/api/profile/:chatId', verifyInternalToken, (req, res) => {
-    const { chatId } = req.params;
-    const profile = userProfiles.get(chatId) || { streakCount: 0, moodScore: 50, nicknames: [], memoryCapsules: [] };
-    const personaId = userPersonas.get(chatId) || 'midnight';
-    res.json({ ...profile, personaId });
-});
-
-app.listen(3008, () => log('API', 'Profile Sync Server listening on port 3008'));
 
 /**
  * Helper to get current Indian Standard Time (IST) formatted

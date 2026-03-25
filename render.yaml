@@ -1,148 +1,33 @@
 services:
-  # 1. Sarvam Proxy
+  # 1. DostAI Mono-Service (8 Backend Services in One)
   - type: web
-    name: sarvam-proxy
+    name: dostai-combined
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix sarvam-proxy
-    startCommand: node sarvam-proxy/adapter.js
+    buildCommand: npm install
+    startCommand: node combined-service.js
     envVars:
       - fromGroup: dostai-shared
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
       - key: SARVAM_API_KEY
         sync: false
-    healthCheckPath: /health
-
-  # 2. OpenClaw Service (Telegram Orchestrator)
-  - type: web
-    name: openclaw-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix openclaw-service
-    startCommand: node openclaw-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3001
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
       - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
+        value: http://localhost:10000/v1/chat/completions # Render default port is 10000
     healthCheckPath: /health
 
-  # 3. Ziva Service
-  - type: web
-    name: ziva-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix ziva-service
-    startCommand: node ziva-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3006
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 4. Liam Service
-  - type: web
-    name: liam-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix liam-service
-    startCommand: node liam-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3007
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 5. Anime Service
-  - type: web
-    name: anime-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix anime-service
-    startCommand: node anime-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3008
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 6. Celeb Service
-  - type: web
-    name: celeb-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix celeb-service
-    startCommand: node celeb-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3009
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 7. SafeSpace Service
-  - type: web
-    name: safespace-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix safespace-service
-    startCommand: node safespace-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3010
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 8. MindReset Service
-  - type: web
-    name: mindreset-service
-    env: node
-    plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix mindreset-service
-    startCommand: node mindreset-service/src/index.js
-    envVars:
-      - key: PORT
-        value: 3011
-      - fromGroup: dostai-shared
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: SARVAM_PROXY_URL
-        value: sarvam-proxy
-    healthCheckPath: /health
-
-  # 9. Web Frontend (Next.js)
+  # 2. Web Frontend (Next.js)
   - type: web
     name: dostai-web
     env: node
     plan: free
-    buildCommand: npm install --prefix shared && npm install --prefix web && npm run build --prefix web
+    buildCommand: npm install --prefix web && npm run build --prefix web
     startCommand: npm start --prefix web
     envVars:
       - fromGroup: dostai-shared
       - key: SARVAM_PROXY_URL
         fromService:
-          name: sarvam-proxy
+          name: dostai-combined
           type: web
           property: host
       - key: NEXT_PUBLIC_SUPABASE_URL
