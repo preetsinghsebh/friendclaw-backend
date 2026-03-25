@@ -26,10 +26,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 3. Ziva Service
@@ -46,10 +43,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 4. Liam Service
@@ -66,10 +60,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 5. Anime Service
@@ -86,10 +77,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 6. Celeb Service
@@ -106,10 +94,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 7. SafeSpace Service
@@ -126,10 +111,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 8. MindReset Service
@@ -146,10 +128,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: SARVAM_PROXY_URL
-        fromService:
-          name: sarvam-proxy
-          type: web
-          property: host
+        value: sarvam-proxy
     healthCheckPath: /health
 
   # 9. Web Frontend (Next.js)

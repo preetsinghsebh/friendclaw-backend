@@ -1,10 +1,10 @@
-// SARVAM PROXY ADAPTER (OLLAMA MASQUERADE MODE)
-// OpenClaw → localhost:3000/api/chat → Sarvam AI (sarvam-m model)
-// Supports /v1/chat/completions (OpenAI) and /api/chat (Ollama)
+import express from 'express';
+import fetch from 'node-fetch';
+import { Telemetry } from '../shared/persistence.js';
+import '../shared/env.js';
 
-const express = require('express');
-const fetch = require('node-fetch');
-require('../shared/env.cjs');
+const telemetry = new Telemetry('sarvam-proxy');
+const log = (module, msg, meta) => telemetry.info(`[${module}] ${msg}`, meta);
 
 const app = express();
 app.use(express.json());
@@ -77,7 +77,7 @@ STRICT RULES:
 // --- OpenAI-Compatible Endpoint ---
 app.post('/v1/chat/completions', async (req, res) => {
     const { messages, model, temperature = 0.7, max_tokens = 600, stream = false } = req.body;
-    console.log(`[OpenAI] Request: model=${model}, stream=${stream}, messages=${messages.length}`);
+    log('OpenAI', `Request: model=${model}, stream=${stream}, messages=${messages.length}`);
     
     const normalizedMessages = [];
     messages.forEach(msg => {
@@ -118,10 +118,17 @@ app.post('/v1/chat/completions', async (req, res) => {
     console.log(`[Sarvam] Final roles:`, normalizedMessages.map(m => m.role).join(' -> '));
 
     try {
+        const sarvamApiKey = process.env.SARVAM_API_KEY;
+        if (!sarvamApiKey) {
+            console.error(`[Sarvam] CRITICAL: SARVAM_API_KEY is missing in environment!`);
+            return res.status(500).json({ error: { message: "Internal Server Error: Missing API Key" } });
+        }
+
+        console.log(`[Sarvam] Sending request to Upstream API...`);
         const sarvamRes = await fetch('https://api.sarvam.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.SARVAM_API_KEY}`,
+                'Authorization': `Bearer ${sarvamApiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -132,11 +139,25 @@ app.post('/v1/chat/completions', async (req, res) => {
                 stream: false
             })
         });
+
+        console.log(`[Sarvam] Upstream Response Status: ${sarvamRes.status} ${sarvamRes.statusText}`);
+        
         const data = await sarvamRes.json();
-        console.log(`[Sarvam] API Response Status: ${sarvamRes.status}`);
+        
+        if (!sarvamRes.ok) {
+            console.error(`[Sarvam] Upstream Error Data:`, JSON.stringify(data));
+            return res.status(sarvamRes.status).json({ 
+                error: { 
+                    message: `Sarvam API Error: ${data.message || data.error || sarvamRes.statusText}`,
+                    details: data
+                } 
+            });
+        }
+
         const content = data.choices?.[0]?.message?.content || data.output || '';
-        console.log(`[Sarvam] Content length: ${content.length}, Content preview: "${content.slice(0, 50)}..."`);
-        if (data.error) console.error(`[Sarvam] API Error:`, data.error);
+        console.log(`[Sarvam] Content length: ${content.length}, Content preview: "${content.slice(0, 50).replace(/\n/g, ' ')}..."`);
+        
+        if (data.error) console.error(`[Sarvam] Logic Error in 200 Response:`, data.error);
 
         if (stream) {
             res.setHeader('Content-Type', 'text/event-stream');
@@ -182,7 +203,8 @@ app.post('/v1/chat/completions', async (req, res) => {
             });
         }
     } catch (err) {
-        res.status(500).json({ error: { message: err.message } });
+        console.error(`[Sarvam] Fetch/JSON Error:`, err);
+        res.status(500).json({ error: { message: `Proxy Internal Error: ${err.message}` } });
     }
 });
 
@@ -195,11 +217,19 @@ app.get('/api/tags', (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
     const { messages, stream = false } = req.body;
+    console.log(`[Ollama] Request: stream=${stream}, messages=${messages?.length}`);
+
     try {
+        const sarvamApiKey = process.env.SARVAM_API_KEY;
+        if (!sarvamApiKey) {
+            console.error(`[Ollama] CRITICAL: SARVAM_API_KEY is missing!`);
+            return res.status(500).json({ error: "Missing API Key" });
+        }
+
         const sarvamRes = await fetch('https://api.sarvam.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.SARVAM_API_KEY}`,
+                'Authorization': `Bearer ${sarvamApiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -208,8 +238,17 @@ app.post('/api/chat', async (req, res) => {
                 max_tokens: 600
             })
         });
+
         const data = await sarvamRes.json();
+        log('OpenAI', `Upstream Status: ${sarvamRes.status}`);
+
+        if (!sarvamRes.ok) {
+            log('OpenAI', `Upstream Error`, data);
+            return res.status(sarvamRes.status).json({ error: data.message || sarvamRes.statusText });
+        }
+
         const content = data.choices?.[0]?.message?.content || data.output || '';
+        log('Ollama', `Content length: ${content.length}`);
 
         if (stream) {
             res.write(JSON.stringify({ model: 'sarvam-m', message: { role: 'assistant', content }, done: true }));
@@ -223,11 +262,12 @@ app.post('/api/chat', async (req, res) => {
             });
         }
     } catch (err) {
+        console.error(`[Ollama] Error:`, err);
         res.status(500).json({ error: err.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Sarvam Masquerade Proxy running on port ${PORT}`);
+    log('System', `Sarvam Masquerade Proxy running on port ${PORT}`);
 });

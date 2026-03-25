@@ -19,12 +19,29 @@ const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
+
+// 1. Ensure protocol
 if (PROXY_URL && !PROXY_URL.startsWith('http')) {
     PROXY_URL = `http://${PROXY_URL}`;
 }
-if (PROXY_URL && !PROXY_URL.endsWith('/v1/chat/completions')) {
-    PROXY_URL = PROXY_URL.endsWith('/') ? `${PROXY_URL}v1/chat/completions` : `${PROXY_URL}/v1/chat/completions`;
+
+// 2. Parse and fix port/hostname/path
+try {
+    const parsed = new URL(PROXY_URL);
+    if ((parsed.hostname.includes('sarvam-proxy') || parsed.hostname === 'localhost') && !parsed.port) {
+        parsed.port = '3000';
+    }
+    if (!parsed.pathname || parsed.pathname === '/') {
+        parsed.pathname = '/v1/chat/completions';
+    }
+    PROXY_URL = parsed.toString();
+} catch (e) {
+    if (PROXY_URL && !PROXY_URL.includes(':') && PROXY_URL.includes('sarvam-proxy')) {
+        PROXY_URL = PROXY_URL.replace(/sarvam-proxy(-[a-z0-9]+)?/i, '$&:3000');
+    }
 }
+
+log('System', `Using Proxy: ${PROXY_URL}`);
 
 if (!token) {
     console.error('CRITICAL: TELEGRAM_BOT_TOKEN is missing in .env');
@@ -391,6 +408,7 @@ async function getCharacterResponse(personaId, userText, isNudge = false, chatId
         messages.push({ role: 'user', content: `${randomScenario} Give me a very short, unique, and character-appropriate proactive nudge to send to the user. Do NOT repeat yourself. Reference the time of day if it makes sense. Stay in character. No hashtags. 1 emoji maximum.` });
     }
 
+    log(`TG-${chatId}`, `LLM: Calling Proxy at ${PROXY_URL}...`);
     const response = await fetch(PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -399,10 +417,17 @@ async function getCharacterResponse(personaId, userText, isNudge = false, chatId
             messages,
             temperature,
             stream: false
-        })
+        }),
+        timeout: 15000 // 15s timeout
     });
 
+    log(`TG-${chatId}`, `LLM: Proxy Response Status: ${response.status}`);
     const data = await response.json();
+    
+    if (!response.ok) {
+        log(`TG-${chatId}`, `LLM: Proxy Error Body: ${JSON.stringify(data)}`);
+        throw new Error(`Proxy Error (${response.status}): ${data.error?.message || response.statusText}`);
+    }
     let content = data.choices?.[0]?.message?.content || "";
 
     // If API returned nothing, throw so the caller can handle with a proper fallback
@@ -842,7 +867,9 @@ bot.on('message', async (msg) => {
             summarizeConversation(chatId, history);
         }
     } catch (e) {
-        log(`TG-${chatId}`, `Error: ${e.message}`);
+        log(`TG-${chatId}`, `CRITICAL ERROR: ${e.message}`);
+        console.error(`[TG-${chatId}] FULL ERROR STACK:`, e);
+
         // Send a natural, in-character error message instead of a generic one
         const personaId = userPersonas.get(chatId) || 'midnight';
         const errorMsgs = [

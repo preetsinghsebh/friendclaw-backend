@@ -60,7 +60,24 @@ export class PersistentMap extends Map {
         } else {
             this.model = filePathOrModel;
             this.service = options.service || 'unknown';
-            // In Mongo mode, we initialize from DB if requested, or just use as a set/get wrapper
+            // Start async load from DB
+            this.load();
+        }
+    }
+
+    async load() {
+        if (this.mode !== 'mongo' || !this.model) return;
+        try {
+            console.log(`[Persistence:Mongo] Loading data for service: ${this.service}...`);
+            const docs = await this.model.find(this.model.modelName === 'User' ? {} : { service: this.service });
+            docs.forEach(doc => {
+                const key = doc.chatId;
+                const value = this.model.modelName === 'User' ? doc.toObject() : doc.summary;
+                super.set(key, value);
+            });
+            console.log(`[Persistence:Mongo] Loaded ${this.size} records from MongoDB for ${this.service}`);
+        } catch (err) {
+            console.error(`[Persistence:Mongo] Load failed for ${this.service}:`, err.message);
         }
     }
 
