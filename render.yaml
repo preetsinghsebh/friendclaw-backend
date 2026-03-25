@@ -7,9 +7,9 @@ services:
     buildCommand: npm install --prefix shared && npm install --prefix sarvam-proxy
     startCommand: node sarvam-proxy/adapter.js
     envVars:
-      - key: PORT
-        value: 3000
       - fromGroup: dostai-shared
+      - key: SARVAM_API_KEY
+        sync: false
     healthCheckPath: /health
 
   # 2. OpenClaw Service (Telegram Orchestrator)
