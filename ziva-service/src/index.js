@@ -13,6 +13,51 @@ import User from '../../shared/models/User.js';
 import Memory from '../../shared/models/Memory.js';
 import Chat from '../../shared/models/Chat.js';
 // Setup production-grade telemetry
+const telemetryQueue = new Telemetry('GlobalAIQueue');
+
+/**
+ * GlobalAIQueue ensures only one LLM request is processed at a time
+ * to prevent resource exhaustion and empty responses on low-tier instances.
+ */
+class GlobalAIQueue {
+    constructor() {
+        this.queue = [];
+        this.processing = false;
+    }
+
+    async add(task, bot, chatId) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ task, resolve, reject, bot, chatId });
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.processing || this.queue.length === 0) return;
+        this.processing = true;
+
+        const { task, resolve, reject, bot, chatId } = this.queue.shift();
+        
+        // Start a heartbeat to keep 'typing' status alive during wait/process
+        const typingInterval = setInterval(() => {
+            bot.sendChatAction(chatId, 'typing').catch(() => {});
+        }, 4000);
+
+        try {
+            const result = await task();
+            resolve(result);
+        } catch (e) {
+            reject(e);
+        } finally {
+            clearInterval(typingInterval);
+            this.processing = false;
+            // Immediate next task
+            setImmediate(() => this.process());
+        }
+    }
+}
+
+const aiQueue = new GlobalAIQueue();
 
 export async function init(sharedApp = null, customToken = null, serviceName = 'ziva') {
     const token = customToken || process.env.TELEGRAM_BOT_TOKEN;
@@ -883,7 +928,12 @@ bot.on('message', async (msg) => {
             bot.sendChatAction(chatId, 'typing');
         }
 
-        const llmResponse = await getCharacterResponse(personaId, text, false, chatId);
+        // 4. SMART QUEUE: Call AI within the serializer to prevent resource contention
+        const llmResponse = await aiQueue.add(
+            () => getCharacterResponse(personaId, text, false, chatId),
+            bot,
+            chatId
+        );
 
         saveToHistory(chatId, 'assistant', llmResponse);
 
