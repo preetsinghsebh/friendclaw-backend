@@ -12,7 +12,7 @@ import { init as initAnime } from './anime-service/src/index.js';
 import { init as initCeleb } from './celeb-service/src/index.js';
 import { init as initSafeSpace } from './safespace-service/src/index.js';
 import { init as initMindReset } from './mindreset-service/src/index.js';
-import { init as initOpenClaw } from './openclaw-service/src/index.js';
+import { init as initChaos } from './openclaw-service/src/index.js';
 
 const telemetry = new Telemetry('mono-service');
 const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
