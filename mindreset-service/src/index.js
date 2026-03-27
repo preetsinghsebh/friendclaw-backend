@@ -12,17 +12,13 @@ import { apiLimiter, verifyInternalToken } from '../../shared/security.js';
 import User from '../../shared/models/User.js';
 import Memory from '../../shared/models/Memory.js';
 import Chat from '../../shared/models/Chat.js';
+import { aiQueue, getCharacterResponse, sendHumanizedResponse as sharedSendResponse } from '../../shared/ai-handler.js';
 
 // Setup production-grade telemetry
 // Setup production-grade telemetry
 export async function init(sharedApp = null, customToken = null, serviceName = 'mindreset') {
     const token = customToken || process.env.TELEGRAM_BOT_TOKEN;
-    let PROXY_URL = process.env.SARVAM_PROXY_URL || 'http://localhost:3000/v1/chat/completions';
-
-    if (!token) {
-        console.error(`[${serviceName}] WARNING: TELEGRAM_BOT_TOKEN is missing`);
-        return;
-    }
+// Note: aiQueue and processing logic moved to shared/ai-handler.js
 
     const telemetry = new Telemetry(serviceName);
     const log = (module, msg) => telemetry.info(`[${module}] ${msg}`);
@@ -121,34 +117,7 @@ export async function init(sharedApp = null, customToken = null, serviceName = '
         log('API', `${serviceName} Profile Sync mounted to /${serviceName}`);
     }
 
-    async function getCharacterResponse(personaId, userText, isNudge = false, chatId = null) {
-        const detectedLang = detectLanguage(userText);
-        const systemPrompt = `PERSONA:${personaId}\nReply in ${detectedLang}. Be a calm, mindful companion. 1-2 sentences.`;
-        const history = chatId ? (userChatHistory.get(chatId) || []) : [];
-        const messages = [{ role: 'system', content: systemPrompt }, ...history.slice(-10), { role: 'user', content: userText }];
-
-        const response = await fetch(PROXY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'sarvam-105b', messages, temperature: 0.7, stream: false }),
-            timeout: 15000
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(`Proxy Error: ${data.status}`);
-        
-        let content = data.choices?.[0]?.message?.content || "";
-        content = content.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
-        return content;
-    }
-
-    async function sendHumanizedResponse(chatId, text, personaId) {
-        if (!text) return;
-        await bot.sendChatAction(chatId, 'typing');
-        const delay = Math.min(Math.max(text.length * 30, 800), 3000);
-        await new Promise(r => setTimeout(r, delay));
-        await safeSendMessage(chatId, enforceSafetyLayer("", text));
-    }
+// getCharacterResponse and sendHumanizedResponse logic moved to shared/ai-handler.js
 
     bot.on('message', async (msg) => {
         try {
@@ -174,15 +143,53 @@ export async function init(sharedApp = null, customToken = null, serviceName = '
                     await clearChatHistory(chatId);
                     userPersonas.set(chatId, personaId);
                 }
-                const welcome = await getCharacterResponse(personaId, "Greet the user.", false);
-                await sendHumanizedResponse(chatId, welcome, personaId);
+                const welcome = await aiQueue.add(
+                    async () => getCharacterResponse({
+                        personaId,
+                        userText: "Greet the user.",
+                        isNudge: false,
+                        proxyUrl: process.env.SARVAM_PROXY_URL,
+                        chatId
+                    }),
+                    bot,
+                    chatId
+                );
+                await sharedSendResponse({
+                    bot,
+                    chatId,
+                    text: welcome,
+                    personaId,
+                    safeSendMessage
+                });
                 return;
             }
 
-            const personaId = userPersonas.get(chatId) || 'guide';
-            const llmResponse = await getCharacterResponse(personaId, text, false, chatId);
+            const personaId = userPersonas.get(chatId) || 'mindreset_coach';
+            
+            const llmResponse = await aiQueue.add(
+                async () => {
+                    const history = userChatHistory.get(chatId) || [];
+                    return getCharacterResponse({
+                        personaId,
+                        userText: text,
+                        history,
+                        proxyUrl: process.env.SARVAM_PROXY_URL,
+                        chatId
+                    });
+                },
+                bot,
+                chatId
+            );
+
             saveToHistory(chatId, 'assistant', llmResponse);
-            await sendHumanizedResponse(chatId, llmResponse, personaId);
+            
+            await sharedSendResponse({
+                bot,
+                chatId,
+                text: llmResponse,
+                personaId,
+                safeSendMessage
+            });
 
         } catch (e) {
             log(`TG-${msg.chat.id}`, `Error: ${e.message}`);

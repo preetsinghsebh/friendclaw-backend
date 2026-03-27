@@ -36,6 +36,7 @@ async function start() {
     const PORT = process.env.PORT || 3000;
     
     // Set internal Proxy URL for bots to reach the shared proxy middleware
+    // We set this on process.env so ALL imported bot services see it immediately
     if (!process.env.SARVAM_PROXY_URL) {
         process.env.SARVAM_PROXY_URL = `http://localhost:${PORT}/v1/chat/completions`;
         log('Master', `Setting internal SARVAM_PROXY_URL to ${process.env.SARVAM_PROXY_URL}`);

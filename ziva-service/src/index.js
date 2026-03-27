@@ -12,52 +12,8 @@ import { apiLimiter, verifyInternalToken } from '../../shared/security.js';
 import User from '../../shared/models/User.js';
 import Memory from '../../shared/models/Memory.js';
 import Chat from '../../shared/models/Chat.js';
-// Setup production-grade telemetry
-const telemetryQueue = new Telemetry('GlobalAIQueue');
-
-/**
- * GlobalAIQueue ensures only one LLM request is processed at a time
- * to prevent resource exhaustion and empty responses on low-tier instances.
- */
-class GlobalAIQueue {
-    constructor() {
-        this.queue = [];
-        this.processing = false;
-    }
-
-    async add(task, bot, chatId) {
-        return new Promise((resolve, reject) => {
-            this.queue.push({ task, resolve, reject, bot, chatId });
-            this.process();
-        });
-    }
-
-    async process() {
-        if (this.processing || this.queue.length === 0) return;
-        this.processing = true;
-
-        const { task, resolve, reject, bot, chatId } = this.queue.shift();
-        
-        // Start a heartbeat to keep 'typing' status alive during wait/process
-        const typingInterval = setInterval(() => {
-            bot.sendChatAction(chatId, 'typing').catch(() => {});
-        }, 4000);
-
-        try {
-            const result = await task();
-            resolve(result);
-        } catch (e) {
-            reject(e);
-        } finally {
-            clearInterval(typingInterval);
-            this.processing = false;
-            // Immediate next task
-            setImmediate(() => this.process());
-        }
-    }
-}
-
-const aiQueue = new GlobalAIQueue();
+import { aiQueue, getCharacterResponse, sendHumanizedResponse as sharedSendResponse } from '../../shared/ai-handler.js';
+// Note: aiQueue is imported from shared/ai-handler.js for global serialization
 
 export async function init(sharedApp = null, customToken = null, serviceName = 'ziva') {
     const token = customToken || process.env.TELEGRAM_BOT_TOKEN;
@@ -350,141 +306,10 @@ function detectOtherAI(text) {
 }
 
 /**
- * Helper to get a character response from Sarvam Proxy
+ * Unified logic to update user context (Streaks, Facts, Nicknames)
  */
-async function getCharacterResponse(personaId, userText, isNudge = false, chatId = null) {
-    // --- LANGUAGE MIRRORING ---
-    // Detect user's language and build a strict mirroring instruction.
-    const detectedLang = detectLanguage(userText);
-    let langInstruction;
-    if (detectedLang === 'hindi') {
-        langInstruction = 'LANGUAGE RULE (CRITICAL): The user wrote in Hindi. You MUST reply ONLY in Hindi (Devanagari script or romanized Hindi). Do NOT mix English. Do NOT switch to any other language.';
-    } else if (detectedLang === 'english') {
-        langInstruction = 'LANGUAGE RULE (CRITICAL): The user wrote in English. You MUST reply ONLY in English. Do NOT mix Hindi or Hinglish. Do NOT switch to any other language.';
-    } else {
-        langInstruction = "LANGUAGE RULE (CRITICAL): The user wrote in Hinglish (Hindi + English mix). You MUST reply in the same Hinglish blend — mix Hindi and English naturally like a Gen-Z girl texting. Do NOT switch to pure Hindi or pure English.";
-    }
-
-    let genderRule = '';
-
-    // --- JEALOUSY MODE ---
-    // If the user mentions another AI/chatbot, inject a strong jealousy reaction rule.
-    const isJealousyTrigger = detectOtherAI(userText);
-    const jealousyRule = isJealousyTrigger
-        ? 'JEALOUSY RULE (CRITICAL): The user just mentioned another AI, chatbot, or digital companion. You MUST react with playful jealousy or teasing curiosity — like a real person who feels a little replaced. Keep it light and fun, never aggressive. Example reactions: "wow replacing me already?", "should I be jealous rn?", "oh interesting... and here I thought I was enough 😒". NEVER give a neutral or analytical reply. NEVER say \'I am an AI\' or explain AI limitations. NEVER say you don\'t experience emotions. React emotionally and stay in character.'
-        : '';
-
-    const humanRule = [
-        'You are a real human texting from your phone. Reply like a real person — casual, short, emotionally aware.',
-        'TEXTING RULES: 1–3 short sentences max. Casual tone. Mirror user\'s message length and energy. Max 1–2 emojis.',
-        'FORMALITY: If user says \'tu\', you say \'tu\'. If user says \'aap\', you say \'aap\'.',
-        'CONTINUITY: ALWAYS respond directly to the user\'s last message. Never ignore what they said.',
-        'NO RANDOM GREETINGS: NEVER send \'Namaste\', \'Hello\', \'Main hazir hoon\', or any intro greeting mid-conversation. That is for first messages only.',
-        'DO NOT act like an AI assistant. No \'How can I help you?\'. No \'As an AI\'.',
-        langInstruction,
-        genderRule,
-        jealousyRule
-    ].filter(Boolean).join(' ');
-
-    // Inject Time awareness
-    const istTime = getISTTime();
-    const timeContext = `\n[Current Time (IST): ${istTime}]`;
-
-    // Inject Persona-specific memories (Facts, Jokes, Nicknames)
-    let memoryContext = '';
-    let history = [];
-    if (chatId) {
-        if (userProfiles.has(chatId)) {
-            const profile = userProfiles.get(chatId);
-            if (profile.nicknames.length > 0) memoryContext += `\nYour nickname for the user: ${profile.nicknames[profile.nicknames.length - 1]}`;
-            if (profile.jokes.length > 0) memoryContext += `\nInside jokes to reference occasionally: ${profile.jokes.join(', ')}`;
-            if (profile.facts.length > 0) memoryContext += `\nFacts about user: ${profile.facts.join(', ')}`;
-        }
-        history = userChatHistory.get(chatId) || [];
-    }
-
-    // Inject Long-Term Memory (Neural Summary)
-    const neuralMemory = chatId ? (userMemories.get(chatId) || "") : "";
-    
-    // Inject Semantic Anchors (Vector Memory)
-    const anchors = chatId ? (await anchorMemories.query(chatId, history[history.length - 1]?.content || "")) : [];
-    const anchorString = anchors.length > 0 ? `\n[SPECIFIC RECOLLECTIONS: ${anchors.join('; ')}]` : "";
-
-    const memoryString = neuralMemory ? `\n[OVERALL SUMMARY: ${neuralMemory}]${anchorString}` : anchorString;
-
-    const systemPrompt = `PERSONA:${personaId}\n${humanRule}${timeContext}${memoryContext}${memoryString}`;
-
-    // Prepare message array for LLM
-    const messages = [];
-    messages.push({ role: 'system', content: systemPrompt });
-
-    // Add history (last 10 messages)
-    history.slice(-10).forEach(msg => messages.push(msg));
-
-    // Add current user message
-    if (userText) {
-        messages.push({ role: 'user', content: userText });
-    }
-
-    let temperature = isJealousyTrigger ? 0.9 : 0.7; // Higher temp for more spontaneous jealous reactions
-
-    if (isNudge) {
-        temperature = 0.95;
-        const scenarios = [
-            "You disappeared today and you're lowkey annoyed but still care.",
-            "Random question... you just thought of something weird and need to ask.",
-            "It's late and you're wondering if they're still awake or just ignoring you.",
-            "You saw a meme (or a Rickroll link) that reminded you of them.",
-            "You're procrastinating on something and want to distract them too.",
-            "You're feeling sassy and want to tease them about something small.",
-            "You just had a random 'important' hypothetical question pop into your head."
-        ];
-        const randomScenario = scenarios[Math.floor(Math.random() * scenarios.length)];
-        messages.push({ role: 'user', content: `${randomScenario} Give me a very short, unique, and character-appropriate proactive nudge to send to the user. Do NOT repeat yourself. Reference the time of day if it makes sense. Stay in character. No hashtags. 1 emoji maximum.` });
-    }
-
-    log(`TG-${chatId}`, `LLM: Calling Proxy at ${PROXY_URL}...`);
-    const response = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: 'sarvam-105b',
-            messages,
-            temperature,
-            stream: false
-        }),
-        timeout: 15000 // 15s timeout
-    });
-
-    log(`TG-${chatId}`, `LLM: Proxy Response Status: ${response.status}`);
-    const data = await response.json();
-    
-    if (!response.ok) {
-        log(`TG-${chatId}`, `LLM: Proxy Error Body: ${JSON.stringify(data)}`);
-        throw new Error(`Proxy Error (${response.status}): ${data.error?.message || response.statusText}`);
-    }
-    let content = data.choices?.[0]?.message?.content || "";
-
-    // If API returned nothing, throw so the caller can handle with a proper fallback
-    if (!content) {
-        throw new Error('LLM returned empty response');
-    }
-
-    // Strip LLM "thinking" blocks or any meta-comments
-    // 1. Remove balanced blocks like <think>...</think>
-    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    // 2. Remove any remaining stray <think> or </think> tags
-    content = content.replace(/<\/?think>/gi, '');
-
-    // Optional: Strip common AI prefixes
-    content = content.replace(/^(Assistant|AI|Assistant AI): /i, '');
-    content = content.trim();
-
-    // If content is empty after stripping, throw so the caller handles it naturally
-    if (!content) {
-        log(`TG-${chatId}`, `Warning: Content became empty after stripping tags. Throwing for caller fallback.`);
-        throw new Error('LLM content empty after stripping');
-    }
+async function updateUserContext(chatId, userText) {
+    if (!chatId || !userText || userText.length < 2) return;
 
     // Memory & Streak Extraction
     if (chatId && userText.length > 2) {
@@ -569,92 +394,12 @@ async function getCharacterResponse(personaId, userText, isNudge = false, chatId
         capsule.messageCount += 1;
 
         // Limits
-        if (profile.facts.length > 10) profile.facts.shift();
-        if (profile.jokes.length > 5) profile.jokes.shift();
         if (profile.events.length > 3) profile.events.shift();
         userProfiles.set(chatId, profile);
     }
-
-    return content;
 }
 
-/**
- * Enhanced Send Utility: Handles Typing Status and Multi-Message Splitting
- * Now with Media Sharing logic!
- */
-async function sendHumanizedResponse(chatId, text, personaId, userText = "") {
-    if (!text) return;
-
-    // Media Sharing Logic (2% chance)
-    if (Math.random() < 0.02) {
-        const detectedLang = detectLanguage(userText || text);
-        let links = [];
-        let msgStr = "";
-
-        if (detectedLang === 'english') {
-            links = [
-                "https://open.spotify.com/track/3USxtqRwSYz57Ewm6cjMNy", // Soft indie
-                "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", // Nickelback
-                "https://www.youtube.com/watch?v=rtOvBOTyX00" // Ed Sheeran
-            ];
-            msgStr = `This song literally reminded me of you rn 🥰 ${links[Math.floor(Math.random() * links.length)]}`;
-        } else {
-            // Hindi / Punjabi / Hinglish
-            links = [
-                "https://open.spotify.com/track/6BylTOfKzXg5kM2xM7Oq6m", // Tum Hi Ho
-                "https://www.youtube.com/watch?v=W-TE_Ys4iqM", // Tera Ban Jaunga
-                "https://open.spotify.com/track/5nUJMIpNtzgPCBzqD4N0pP" // Lover - Diljit
-            ];
-            msgStr = `Yar ye gaana suno, totally tumhari yaad aati hai ise sunke ❤️ ${links[Math.floor(Math.random() * links.length)]}`;
-        }
-
-        await safeSendMessage(chatId, msgStr);
-        await new Promise(r => setTimeout(r, 2000));
-    }
-
-    // 1. Trigger Typing status
-    await bot.sendChatAction(chatId, 'typing');
-
-    // 2. Split text into chunks (by sentences or newlines)
-    let chunks = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
-
-    // ZIVA SPECIAL: Multi-part messaging (occasionally split a single thought into two bursts)
-    if ((personaId === 'sweet_gf' || personaId === 'sweetie') && chunks.length === 1 && text.length > 25 && Math.random() < 0.4) {
-        // Split roughly in half or at a comma/space
-        const mid = Math.floor(text.length / 2);
-        const splitPos = text.indexOf(' ', mid) !== -1 ? text.indexOf(' ', mid) : mid;
-        chunks = [text.slice(0, splitPos).trim(), text.slice(splitPos).trim()];
-    }
-
-    // 3. Send chunks with randomized delays
-    for (const chunk of chunks) {
-        const trimmed = chunk.trim();
-        if (!trimmed) continue;
-
-        // Trigger Typing status for each chunk
-        await bot.sendChatAction(chatId, 'typing');
-
-        // TYPO POST-CORRECTION (2% chance)
-        // If triggered, we send the chunk with a small typo, then fix it
-        const shouldTypo = Math.random() < 0.02 && trimmed.length > 15;
-        let finalChunk = enforceSafetyLayer("", trimmed);
-
-        if (shouldTypo) {
-            // Simple typo: swap last two characters or remove one
-            const typoChunk = finalChunk.length > 5 ? finalChunk.slice(0, -2) + finalChunk.slice(-1) + finalChunk.slice(-2, -1) : finalChunk + "x";
-            await safeSendMessage(chatId, typoChunk);
-            await new Promise(r => setTimeout(r, 1500));
-            // Send correction
-            const lastWord = trimmed.split(' ').pop().replace(/[.!?]/g, '');
-            await safeSendMessage(chatId, `*${lastWord}`);
-        } else {
-            // Artificial delay based on chunk length (real typing feel)
-            const delay = Math.min(Math.max(trimmed.length * 30, 800), 3000);
-            await new Promise(r => setTimeout(r, delay));
-            await safeSendMessage(chatId, finalChunk);
-        }
-    }
-}
+// sendHumanizedResponse logic moved to shared/ai-handler.js
 
 /**
  * Summarizes the conversation to ensure long-term memory
@@ -705,6 +450,9 @@ bot.on('message', async (msg) => {
     // Track activity
     userActivity.set(chatId, Date.now());
     trackMessage(chatId, msg.message_id);
+
+    // Update memory/streaks in background
+    updateUserContext(chatId, text).catch(e => log(`TG-${chatId}`, `Context Update Error: ${e.message}`));
 
     // 🌅 Cold-start wake-up notification
     if (Date.now() - SERVICE_START_TIME < WARMUP_WINDOW_MS && !warnedUsers.has(chatId)) {
@@ -930,14 +678,36 @@ bot.on('message', async (msg) => {
 
         // 4. SMART QUEUE: Call AI within the serializer to prevent resource contention
         const llmResponse = await aiQueue.add(
-            () => getCharacterResponse(personaId, text, false, chatId),
+            async () => {
+                const profile = userProfiles.get(chatId) || {};
+                const neuralMemory = userMemories.get(chatId) || "";
+                const history = userChatHistory.get(chatId) || [];
+                const anchors = await anchorMemories.query(chatId, history[history.length - 1]?.content || "");
+
+                return getCharacterResponse({
+                    personaId,
+                    userText: text,
+                    history,
+                    memory: neuralMemory,
+                    anchors,
+                    profile,
+                    proxyUrl: process.env.SARVAM_PROXY_URL,
+                    chatId
+                });
+            },
             bot,
             chatId
         );
 
         saveToHistory(chatId, 'assistant', llmResponse);
 
-        await sendHumanizedResponse(chatId, llmResponse, personaId, text);
+        await sharedSendResponse({
+            bot,
+            chatId,
+            text: llmResponse,
+            personaId,
+            safeSendMessage
+        });
         log(`TG-${chatId}`, `Responded to: "${text.slice(0, 30)}..."`);
 
         // 5. Periodic Memory Sync (Neural Summary)
