@@ -79,6 +79,10 @@ async function start() {
     await initSafe('chaos', initChaos, process.env.CHAOS_BOT_TOKEN);
 
     // 4. Global Health Check
+    app.get('/', (req, res) => {
+        res.send('<h1>✨ DostAI Mono-Service is Online</h1><p>All 9 bots are polling and healthy. Reach individual bots on Telegram.</p><p>Check <a href="/health">/health</a> for system status.</p>');
+    });
+
     app.get('/health', (req, res) => {
         res.json({
             status: 'healthy',
