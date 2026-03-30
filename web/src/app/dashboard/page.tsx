@@ -14,8 +14,10 @@ import {
     LayoutDashboard,
     UserCircle,
     Users,
-    Share2
+    Share2,
+    CheckCircle2
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 interface UserProfile {
@@ -43,6 +45,10 @@ function DashboardContent() {
     const [userData, setUserData] = useState<{ profile: UserProfile; activePersonas: any[] } | null>(null);
     const [availablePersonas, setAvailablePersonas] = useState<any[]>([]);
     
+    // Toast UI State
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState("");
+    
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
     const handleSwitchPersona = async (personaId: string) => {
@@ -65,11 +71,14 @@ function DashboardContent() {
         }
     };
 
-    const handleShare = (text: string, author: string = "Companion") => {
-        const shareText = `"${text}"\n\n— ${author} via BuddyClaw.chat 🐾\nJoin the neural link now!`;
+    const handleShare = (text: string, author: string = "Companion", personaId?: string) => {
+        const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/auth?ref=${personaId || 'buddy'}` : 'BuddyClaw.chat';
+        const shareText = `"${text}"\n\n— ${author} via BuddyClaw.chat 🐾\nConnect with us: ${shareUrl}`;
+        
         navigator.clipboard.writeText(shareText);
-        // Using a basic alert for now to keep it simple as requested
-        alert("Transmission copied to clipboard! 🚀 Sharing is caring.");
+        setToastMessage("Link copied to clipboard! 🚀");
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
     };
 
     const handleAskCouncil = async () => {
@@ -449,6 +458,21 @@ function DashboardContent() {
                 <footer className="mt-20 pt-8 border-t border-white/5 text-center text-white/20 text-xs">
                     BuddyClaw Neural Link Protocol &copy; 2026. Data localized via Geo-IP.
                 </footer>
+                <AnimatePresence>
+                    {showToast && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-[#FFB300] text-black px-6 py-3 rounded-full shadow-[0_10px_40px_rgba(255,179,0,0.3)] flex items-center gap-3 border border-white/20 backdrop-blur-md"
+                        >
+                            <div className="w-5 h-5 bg-black/10 rounded-full flex items-center justify-center">
+                                <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                            <span className="font-bold tracking-tight text-sm uppercase">{toastMessage}</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

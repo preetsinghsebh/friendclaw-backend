@@ -282,28 +282,36 @@ async function start() {
         res.json({ success: true, personaId: persona.id, name: persona.name });
     });
 
-    // API: Ask Council (Parallel multi-persona response)
+    // API: Ask Council (Sequenced multi-persona response to avoid rate limits)
     app.post('/api/council', async (req, res) => {
         const { id, text } = req.body;
         if (!id || !text) return res.status(400).json({ error: 'Missing parameters' });
 
         const councilMemberIds = ['ziva', 'liam', 'roaster'];
-        const results = await Promise.all(councilMemberIds.map(async (pId) => {
+        const answers = [];
+
+        for (const pId of councilMemberIds) {
             const persona = await personaManager.getPersona(pId);
-            if (!persona) return null;
+            if (!persona) continue;
+
             const messages = [
                 { role: 'system', content: persona.systemPrompt },
                 { role: 'user', content: text }
             ];
-            try {
-                const response = await getSarvamChatResponse(messages, persona);
-                return { id: pId, name: persona.name, content: response };
-            } catch (err) {
-                return { id: pId, name: persona.name, content: "Neural link timeout..." };
-            }
-        }));
 
-        res.json({ question: text, answers: results.filter(r => r !== null) });
+            try {
+                // Add tiny stagger for neural sync
+                if (answers.length > 0) await new Promise(r => setTimeout(r, 200));
+                
+                const response = await getSarvamChatResponse(messages, persona);
+                answers.push({ id: pId, name: persona.name, content: response });
+            } catch (err) {
+                log('Council Error', `${pId} failed: ${err.message}`);
+                answers.push({ id: pId, name: persona.name, content: `Neural link unstable. ${pId} is currently silent.` });
+            }
+        }
+
+        res.json({ success: true, answers });
     });
 
     const PORT = process.env.PORT || 3000;

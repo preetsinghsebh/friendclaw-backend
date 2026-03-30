@@ -1,8 +1,20 @@
-import { promises as fs } from 'fs';
+import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
 
-const DEFAULT_PATH = path.resolve(process.cwd(), 'buddy-claw-service', 'config', 'personas.json');
+const getBestConfigPath = () => {
+    const paths = [
+        path.resolve(process.cwd(), 'config', 'personas.json'),
+        path.resolve(process.cwd(), 'buddy-claw-service', 'config', 'personas.json'),
+        path.resolve(process.cwd(), '..', 'buddy-claw-service', 'config', 'personas.json')
+    ];
+    for (const p of paths) {
+        if (fs.existsSync(p)) return p;
+    }
+    return paths[1]; // Fallback to original
+};
+
+const DEFAULT_PATH = getBestConfigPath();
 
 // Schema for Personas if stored in MongoDB
 const PersonaSchema = new mongoose.Schema({
@@ -45,11 +57,11 @@ export class PersonaManager {
 
         if (!loadedFromMongo) {
             try {
-                const stats = await fs.stat(this.configPath);
+                const stats = await fsPromises.stat(this.configPath);
                 if (!force && this.lastMTime && this.lastMTime.getTime() === stats.mtime.getTime() && this.personas.size > 0) {
                     return;
                 }
-                const raw = await fs.readFile(this.configPath, 'utf8');
+                const raw = await fsPromises.readFile(this.configPath, 'utf8');
                 const data = JSON.parse(raw);
                 if (!Array.isArray(data)) {
                     throw new Error('Persona configuration must be an array');
@@ -102,7 +114,7 @@ export class PersonaManager {
     async saveToDisk() {
         try {
             const list = Array.from(this.personas.values());
-            await fs.writeFile(this.configPath, JSON.stringify(list, null, 2));
+            await fsPromises.writeFile(this.configPath, JSON.stringify(list, null, 2));
             console.log(`[PersonaManager] Saved ${list.length} personas to JSON config`);
         } catch (err) {
             console.error(`[PersonaManager] Failed to save to disk: ${err.message}`);

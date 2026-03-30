@@ -19,6 +19,7 @@ function AuthForm() {
     const persona = PERSONAS.find(p => p.id.toLowerCase() === personaId?.toLowerCase());
 
     const [method, setMethod] = useState<"phone" | "email">("phone");
+    const [isSignUp, setIsSignUp] = useState(true);
     const [step, setStep] = useState<"identifier" | "otp">("identifier");
     const [identifier, setIdentifier] = useState("");
     const [otp, setOtp] = useState("");
@@ -141,16 +142,33 @@ function AuthForm() {
         >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[hsl(var(--accent-pink))] to-[hsl(var(--accent-purple))]" />
 
+            <div className="flex border-b border-white/5 mb-8">
+                <button 
+                    onClick={() => setIsSignUp(true)}
+                    className={`flex-1 pb-4 text-xs font-black tracking-widest uppercase transition-colors ${isSignUp ? "text-[#FFB300] border-b-2 border-[#FFB300]" : "text-white/20"}`}
+                >
+                    Create Account
+                </button>
+                <button 
+                    onClick={() => setIsSignUp(false)}
+                    className={`flex-1 pb-4 text-xs font-black tracking-widest uppercase transition-colors ${!isSignUp ? "text-[#FFB300] border-b-2 border-[#FFB300]" : "text-white/20"}`}
+                >
+                    Sign In
+                </button>
+            </div>
+
             <div className="text-center mb-8">
                 <h1 className="text-3xl font-anton text-white mb-2 tracking-wider">
-                    {persona ? `Join BuddyClaw to chat with ${persona.name}` : "Join BuddyClaw"}
+                    {persona 
+                        ? (isSignUp ? `Meet ${persona.name}` : `Back to ${persona.name}`) 
+                        : (isSignUp ? "Join BuddyClaw" : "Welcome Back")}
                 </h1>
                 <p className="text-gray-400 font-inter text-sm">
                     {isSuccess 
                         ? "Authentication successful! Opening your chat in Telegram..."
-                        : (persona 
-                            ? `Sign up for free unlimited chats with ${persona.name}. Your 2am companion is waiting.`
-                            : "Your 2am companion is waiting for you. Sign in or create an account to continue.")}
+                        : (isSignUp 
+                            ? "Start your private 2am journey now." 
+                            : "Unlock your existing neural links.")}
                 </p>
             </div>
 
@@ -221,8 +239,7 @@ function AuthForm() {
                                  id="age-gate"
                                  checked={is18Plus}
                                  onCheckedChange={(c: boolean | 'indeterminate') => setIs18Plus(c === true)}
-                                 className="mt-1 size-5 border-2 data-[state=checked]:bg-white data-[state=checked]:text-black data-[state=checked]:border-white"
-                                 style={{ border: '2px solid white', backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                                 className="mt-1 size-5 border-2 border-white/60 bg-white/10 data-[state=checked]:bg-[#FFB300] data-[state=checked]:text-[#05050A] data-[state=checked]:border-[#FFB300] transition-colors"
                              />
                             <div className="grid leading-none gap-1.5">
                                 <Label htmlFor="age-gate" className="text-sm font-medium leading-tight text-gray-300 cursor-pointer font-inter">
