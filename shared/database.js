@@ -7,8 +7,8 @@ let isConnected = false;
 export const connectDB = async () => {
     if (isConnected) return true;
 
-    if (!process.env.MONGODB_URI) {
-        console.warn(`[Database] MONGODB_URI is missing in environment. Falling back to default: ${MONGODB_URI}`);
+    if (!process.env.MONGO_URI && !process.env.MONGODB_URI) {
+        console.warn(`[Database] MONGO_URI or MONGODB_URI is missing in environment. Falling back to default: ${MONGODB_URI}`);
     }
 
     try {
