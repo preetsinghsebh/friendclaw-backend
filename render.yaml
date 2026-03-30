@@ -1,38 +1,22 @@
 services:
-  # 1. Buddy Claw universal bot
+  # 1. Buddy Claw Universal AI Bot Engine
   - type: web
-    name: buddy-claw
+    name: buddy-claw-universal
     env: node
     plan: free
+    region: singapore # Optimized for Sarvam API (India)
+    rootDir: dostai
     buildCommand: npm install
     startCommand: npm start
     envVars:
-      - fromGroup: dostai-shared
-      - key: BUDDY_CLAW_TOKEN
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: MONGO_URI
         sync: false
       - key: SARVAM_API_KEY
         sync: false
-      - key: MONGODB_URI
-        sync: false
       - key: SARVAM_PROXY_URL
-        value: http://localhost:10000/v1/chat/completions
+        value: https://api.sarvam.ai/v1/chat/completions # Standard upstream
+      - key: NODE_ENV
+        value: production
     healthCheckPath: /health
-
-  # 2. Web Frontend (Next.js)
-  - type: web
-    name: dostai-web
-    env: node
-    plan: free
-    buildCommand: npm install --prefix web && npm run build --prefix web
-    startCommand: npm start --prefix web
-    envVars:
-      - fromGroup: dostai-shared
-      - key: SARVAM_PROXY_URL
-        fromService:
-          name: buddy-claw
-          type: web
-          property: host
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        sync: false

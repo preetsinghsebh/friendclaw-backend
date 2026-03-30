@@ -6,8 +6,7 @@
   "main": "buddy-claw-service/index.js",
   "scripts": {
     "start": "node buddy-claw-service/index.js",
-    "install-all": "npm install && npm install --prefix web",
-    "build": "echo 'Root build not required. Deployment uses combined-service.js.'"
+    "build": "echo 'Build handled by Render Web Service configuration.'"
   },
   "dependencies": {
     "axios": "^1.7.9",

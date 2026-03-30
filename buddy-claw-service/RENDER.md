@@ -1,37 +1,46 @@
-# 🚀 Deployment Steps for Render
+# 🚀 Deploying Buddy Claw Universal Bot to Render
 
-To deploy **Buddy Claw** on Render, follow these steps:
+Follow these exact steps to deploy your consolidated backend as a single service.
 
-### 1. New Web Service
-1. Go to your [Render Dashboard](https://dashboard.render.com).
-2. Click **New +** and select **Web Service**.
-3. Connect your GitHub repository.
+### 1. Unified Web Service Setup
+1. Log in to [Render](https://dashboard.render.com).
+2. Create a **New +** → **Web Service**.
+3. Select your GitHub repository.
 4. Set the following:
-   - **Name**: `buddy-claw-backend`
+   - **Service Name**: `buddy-claw-bot`
    - **Runtime**: `Node`
+   - **Root Directory**: `dostai`
    - **Build Command**: `npm install`
-   - **Start Command**: `npm start` (This will run `node buddy-claw-service/index.js` as defined in `dostai/package.json`)
+   - **Start Command**: `npm start` (Runs `node buddy-claw-service/index.js`)
 
-### 2. Environment Variables
-In the **Environment** tab, add the following (Critical):
+### 2. Environment Variables (Required)
+Add these keys in the **Environment** tab:
 
-| Key | Value |
-| --- | --- |
-| `SARVAM_API_KEY` | your-sarvam-api-key |
-| `MONGO_URI` | your-mongodb-uri |
-| `BUDDY_CLAW_TOKEN` | your-telegram-bot-token |
-| `PORT` | 3000 (Render usually sets this automatically) |
-| `USE_WEBHOOK` | `false` (Keep false for polling, or `true` if you configure webhooks) |
+| Key | Value | Description |
+| --- | --- | --- |
+| `TELEGRAM_TOKEN` | `your_bot_token` | Universal bot token from @BotFather |
+| `MONGO_URI` | `your_db_uri` | MongoDB Atlas connection string |
+| `SARVAM_API_KEY` | `your_api_key` | Sarvam.ai API key |
+| `PORT` | `3000` | Render usually handles this automatically |
 
-### 3. Mongo Migration (Optional but Recommended)
-If you want to move personas from the JSON file to your MongoDB:
-1. Connect to your MongoDB.
-2. Insert your persona records into a collection named `personas`.
-3. The server will automatically detect and load them from Mongo next time it starts!
+### 3. Safety Constraints (Already Implemented)
+- **Polling Mode**: Hardcoded to `true` (No webhook setup needed).
+- **Consolidated Engine**: Only one bot instance handles 27+ personas.
+- **Port Binding**: Express server is active on `/health` to keep Render happy.
 
-### 4. Health Checks
-- **Health Check Path**: `/health`
-- **Port**: `3000`
+### 4. Verification & Debugging
+- **Bot Check**: Message your bot on Telegram. It should respond with current persona behavior.
+- **Health Check**: Open `https://your-service.onrender.com/health` in your browser.
+- **Logs**: Check Render logs for:
+  - `[Database] MongoDB Connected Successfully`
+  - `[System] Buddy Claw Universal Bot is live and polling!`
+- **No Response?**:
+  - Verify `TELEGRAM_TOKEN` is correct.
+  - Check if another instance of the bot is running elsewhere (e.g. your local terminal). Only one polling instance can be active at a time!
 
-### 5. Deployment
-Click **Create Web Service**. Your universal Buddy Claw bot will be live shortly! ✨
+### 5. Final Checklist
+- [x] `dostai/package.json` points to the correct engine.
+- [x] Redundant service folders archived or removed.
+- [x] Environment variables named correctly.
+
+✨ **Buddy Claw is ready to serve!**

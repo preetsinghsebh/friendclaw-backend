@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const BuddyUserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     activePersonaId: { type: String, default: 'ziva' },
+    totalMessages: { type: Number, default: 0 },
     memory: {
         type: [{
             role: { type: String, enum: ['user', 'assistant', 'system'] },
@@ -11,7 +12,7 @@ const BuddyUserSchema = new mongoose.Schema({
         default: []
     },
     xp: { type: Number, default: 0 },
-    lastActive: { type: Date, default: Date.now }
+    lastActiveAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
 const BuddyUser = mongoose.models.BuddyUser || mongoose.model('BuddyUser', BuddyUserSchema);

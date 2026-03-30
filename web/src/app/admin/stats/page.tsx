@@ -16,9 +16,15 @@ export default function AdminStats() {
     const fetchStats = async () => {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-            const res = await fetch(`${apiUrl}/api/admin/stats`)
+            const res = await fetch(`${apiUrl}/stats`)
             const data = await res.json()
-            setStats(data)
+            setStats({
+                totalEvents: data.totalMessages,
+                uniqueUsers: data.totalUsers,
+                topPersona: data.topPersona,
+                topCategory: 'AI Comp',
+                recentEvents: data.recentActivity || []
+            })
             setLoading(false)
         } catch (e) {
             console.error("Stats fetch failed")
@@ -28,8 +34,7 @@ export default function AdminStats() {
 
     useEffect(() => {
         fetchStats()
-        // Refresh every 30 seconds
-        const interval = setInterval(fetchStats, 30000)
+        const interval = setInterval(fetchStats, 15000)
         return () => clearInterval(interval)
     }, [])
 

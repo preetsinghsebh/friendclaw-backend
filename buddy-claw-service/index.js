@@ -6,9 +6,10 @@ import { connectDB } from '../shared/database.js';
 import { Telemetry } from '../shared/persistence.js';
 import { personaManager } from './persona-manager.js';
 import BuddyUser from './models/User.js';
+import BuddyStats from './models/Stats.js';
 import { getSarvamChatResponse } from './src/services/sarvam.js';
 
-const TELEGRAM_TOKEN = process.env.BUDDY_CLAW_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || process.env.BUDDY_CLAW_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 const SARVAM_API_KEY = process.env.SARVAM_API_KEY;
 const DEFAULT_PERSONA = 'ziva';
 const ERROR_MESSAGE = 'thoda system slow ho gaya… ek sec 😅';
@@ -69,11 +70,17 @@ async function handleBotMessage(bot, msg) {
     const text = (msg.text || msg.caption || '').trim();
     if (!chatId || !text) return;
 
+    console.log(`[Buddy Claw] Message received from ${chatId}: ${text.slice(0, 120)}`);
+
     // 1. Identify User (Create if not exists)
     let user = await BuddyUser.findOne({ userId: String(chatId) });
     if (!user) {
         user = new BuddyUser({ userId: String(chatId), activePersonaId: DEFAULT_PERSONA });
         await user.save();
+        
+        // Track new user in global stats
+        await BuddyStats.updateOne({}, { $inc: { totalUsers: 1 } }, { upsert: true });
+        
         log('User', `New user registered: ${chatId}`);
     }
 
@@ -189,23 +196,39 @@ async function handleBotMessage(bot, msg) {
 
     // 4. Send request via Queue
     try {
-        log('AI', `Processing request for user ${chatId} using persona ${persona.id}`);
+        log('AI', `User ${chatId} used persona "${persona.id}"`);
         const response = await aiQueue.add(() => getSarvamChatResponse(messages, persona), bot, chatId);
-        
-        // 5. Update State with rolling memory (limit to 12 entries)
+
+        // 5. Update State with rolling memory
         const userMsg = { role: 'user', content: text };
         const assistantMsg = { role: 'assistant', content: response };
         
-        user.memory = [...(user.memory || []), userMsg, assistantMsg].slice(-12);
-        user.xp = (user.xp || 0) + 10; // Earn 10 XP per message exchange
-        user.lastActive = new Date();
+        user.memory = [...(user.memory || []), userMsg, assistantMsg].slice(-16);
+        user.xp = (user.xp || 0) + 10;
+        user.totalMessages = (user.totalMessages || 0) + 1;
+        user.lastActiveAt = new Date();
         await user.save();
 
-        // 6. Return response to user
+        // 6. Global Stats update
+        const today = new Date().toISOString().split('T')[0];
+        await BuddyStats.updateOne({}, { 
+            $inc: { 
+                totalMessages: 1, 
+                [`personaUsage.${persona.id}`]: 1,
+                [`dailyUsage.${today}`]: 1
+            }
+        }, { upsert: true });
+
+        console.log(`[Buddy Claw] User ${chatId} used persona "${persona.id}" -> message count: ${user.totalMessages}`);
+        log('AI', `User ${chatId} used persona "${persona.id}" -> message count: ${user.totalMessages}`);
+        console.log(`[Buddy Claw] Response for ${chatId} via ${persona.id}: ${response.substring(0, 80)}...`);
+        log('AI', `Response generated for ${chatId}: ${response.substring(0, 50)}...`);
+
+        // 7. Return response to user
         await bot.sendMessage(chatId, response);
     } catch (err) {
         log('Error', `Chat ${chatId} failed: ${err.message}`);
-        console.error(err);
+        console.error(`[Buddy Claw] Error for ${chatId}: ${err.message}`);
         await bot.sendMessage(chatId, ERROR_MESSAGE);
     }
 }
@@ -245,22 +268,84 @@ async function start() {
         const profile = {
             userId: user.userId,
             activePersonaId: user.activePersonaId,
+            totalMessages: user.totalMessages || 0,
             memory: user.memory || [],
             xp: user.xp || 0,
             level: Math.floor(Math.sqrt((user.xp || 0) / 10)),
-            lastActive: user.lastActive,
+            lastActive: user.lastActiveAt,
+            createdAt: user.createdAt,
             // Fallback stats for UI consistency
             nicknames: ['Friend'], 
             facts: [],
             streakCount: 1, 
             moodScore: 75,
-            lastChatDate: user.lastActive?.toISOString().split('T')[0]
+            lastChatDate: user.lastActiveAt?.toISOString().split('T')[0]
         };
 
         res.json({
             profile,
             activePersonas: activePersona ? [activePersona] : []
         });
+    });
+
+    // NEW ANALYTICS ENDPOINTS
+    app.get('/stats', async (req, res) => {
+        try {
+            const statsDoc = await BuddyStats.findOne({});
+            const totalUsersAgg = await BuddyUser.countDocuments();
+
+            const personaEntries = (() => {
+                if (!statsDoc?.personaUsage) return [];
+                if (statsDoc.personaUsage instanceof Map) return Array.from(statsDoc.personaUsage.entries());
+                return Object.entries(statsDoc.personaUsage);
+            })();
+
+            let topPersona = 'none';
+            let maxUsed = 0;
+            for (const [pId, count] of personaEntries) {
+                if (typeof count === 'number' && count > maxUsed) {
+                    maxUsed = count;
+                    topPersona = pId;
+                }
+            }
+
+            const dailyEntries = (() => {
+                if (!statsDoc?.dailyUsage) return [];
+                if (statsDoc.dailyUsage instanceof Map) return Array.from(statsDoc.dailyUsage.entries());
+                return Object.entries(statsDoc.dailyUsage);
+            })();
+
+            res.json({
+                totalUsers: totalUsersAgg || (statsDoc?.totalUsers || 0),
+                totalMessages: statsDoc?.totalMessages || 0,
+                topPersona,
+                topPersonaUsageCount: maxUsed,
+                personaUsage: Object.fromEntries(personaEntries),
+                dailyUsage: Object.fromEntries(dailyEntries)
+            });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.get('/user/:id', async (req, res) => {
+        try {
+            const user = await BuddyUser.findOne({ userId: req.params.id });
+            if (!user) return res.status(404).json({ error: 'User not found' });
+            const activePersona = await personaManager.getPersona(user.activePersonaId);
+            res.json({
+                userId: user.userId,
+                totalMessages: user.totalMessages || 0,
+                activePersonaId: user.activePersonaId,
+                personaName: activePersona?.name || null,
+                lastActiveAt: user.lastActiveAt,
+                createdAt: user.createdAt,
+                memoryCount: user.memory?.length || 0,
+                xp: user.xp || 0
+            });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
     });
 
     // API: Switch Persona (Web Dashboard)
@@ -317,12 +402,13 @@ async function start() {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => log('System', `HTTP interface listening on port ${PORT}`));
 
-    // Bot implementation (Polling for simple local tests, Webhook for production)
-    const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: process.env.USE_WEBHOOK !== 'true' });
+    // Bot setup: Polling mode ONLY as requested
+    const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+    
     bot.on('message', (msg) => handleBotMessage(bot, msg));
     bot.on('polling_error', (err) => log('Telegram', `Polling error: ${err.message}`));
 
-    log('System', 'Buddy Claw is live and universal!');
+    log('System', 'Buddy Claw Universal Bot is live and polling!');
 }
 
 start().catch((err) => {
