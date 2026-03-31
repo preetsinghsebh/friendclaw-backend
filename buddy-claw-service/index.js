@@ -105,18 +105,35 @@ async function handleBotMessage(bot, msg) {
         return bot.sendMessage(chatId, `vibe check! 🧿 i'm helpfully channeling *${persona.name}* for you right now! ✨`, { parse_mode: 'Markdown' });
     }
 
-    // 2. Persona Switching Command
-    if (text.startsWith('/switch')) {
-        const [, requestedId] = text.split(' ');
-        if (!requestedId) {
-            await bot.sendMessage(chatId, 'Usage: /switch <personaId>\nTry /personas to see the list.');
-            return;
+    // 2. Persona Switching / Grid Command
+    if (text === '/switch' || text === '/personas') {
+        const personas = await personaManager.listPersonas();
+        
+        // Group personas into rows of 2 for a clean grid
+        const keyboard = [];
+        for (let i = 0; i < personas.length; i += 2) {
+            const row = personas.slice(i, i + 2).map(p => ({
+                text: `${p.icon} ${p.name}`,
+                callback_data: `switch:${p.id}`
+            }));
+            keyboard.push(row);
         }
-        const persona = await personaManager.getPersona(requestedId.trim().toLowerCase());
-        if (!persona) {
-            await bot.sendMessage(chatId, `I don't know who "${requestedId}" is yet! 😅 Try /personas.`);
-            return;
-        }
+
+        await bot.sendMessage(chatId, "🧿 *BuddyClaw Neural Link*\nWho would you like to talk to?", {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard }
+        });
+        return;
+    }
+
+    // Handle legacy manual switch for power users
+    if (text.startsWith('/switch ')) {
+        const requestedId = text.split(' ')[1]?.trim().toLowerCase();
+        if (!requestedId) return bot.sendMessage(chatId, 'Usage: /switch <personaId>');
+        
+        const persona = await personaManager.getPersona(requestedId);
+        if (!persona) return bot.sendMessage(chatId, `I don't know who "${requestedId}" is yet! 😅 Try /personas.`);
+        
         user.activePersonaId = persona.id;
         await user.save();
         await bot.sendMessage(chatId, `Switched to *${persona.name}*! ${persona.tone === 'warm' ? '✨' : '🔥'}`, { parse_mode: 'Markdown' });
@@ -471,6 +488,40 @@ async function start() {
 
     log('System', 'Buddy Claw Universal Bot is live and polling!');
 }
+
+/**
+ * Global Callback Listener (for persona switching buttons)
+ */
+bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id;
+    const data = query.data;
+
+    if (data.startsWith('switch:')) {
+        const personaId = data.split(':')[1];
+        try {
+            const persona = await personaManager.getPersona(personaId);
+            if (!persona) throw new Error('Persona not found');
+
+            const user = await withRetry(() => BuddyUser.findOne({ userId: String(chatId) }));
+            if (!user) throw new Error('User not found');
+
+            user.activePersonaId = personaId;
+            await user.save();
+
+            // Answer callback to remove loading state on button
+            await bot.answerCallbackQuery(query.id, { text: `Neural Link to ${persona.name} established! 🧿` });
+            
+            // Send a warm notification
+            await bot.sendMessage(chatId, `vibe check! 🧿 i'm helpfully channeling *${persona.name}* for you now! ✨`, { parse_mode: 'Markdown' });
+            
+            // Optionally, delete the keyboard message to keep the chat clean
+            await bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+        } catch (err) {
+            console.error('[Switch Error]', err.message);
+            await bot.answerCallbackQuery(query.id, { text: 'Switch failed... try again!' });
+        }
+    }
+});
 
 /**
  * Nudge System (Idea #1)
