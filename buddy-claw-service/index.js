@@ -12,6 +12,16 @@ import { getSarvamChatResponse } from './src/services/sarvam.js';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const SARVAM_API_KEY = process.env.SARVAM_API_KEY;
 const DEFAULT_PERSONA = 'ziva';
+
+// Persistent "Command Center" Keyboard
+const PERSISTENT_KEYBOARD = {
+    keyboard: [
+        [{ text: 'Change Buddy 🧿' }, { text: 'My Stats 📈' }],
+        [{ text: 'The Council 🏛️' }]
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false
+};
 const ERROR_MESSAGE = 'thoda system slow ho gaya… ek sec 😅';
 
 const BUDDY_CLAW_CORE = `
@@ -80,36 +90,20 @@ const aiQueue = new AiQueue();
  */
 async function handleBotMessage(bot, msg) {
     console.log('DEBUG: handleBotMessage entered', msg.text || '(no text)');
-    const chatId = msg.chat?.id;
-    const text = (msg.text || msg.caption || '').trim();
-    if (!chatId || !text) return;
+    const chatId = msg.chat.id;
+    const text = msg.text || '';
+    if (!text) return;
 
-    console.log(`[Buddy Claw] Message received from ${chatId}: ${text.slice(0, 120)}`);
-
-    // 1. Identify User (Create if not exists)
+    // Load or Create User
     let user = await withRetry(() => BuddyUser.findOne({ userId: String(chatId) }));
     if (!user) {
-        user = new BuddyUser({ userId: String(chatId), activePersonaId: DEFAULT_PERSONA });
-        await user.save();
-        
-        // Track new user in global stats
-        await BuddyStats.updateOne({}, { $inc: { totalUsers: 1 } }, { upsert: true });
-        
-        log('User', `New user registered: ${chatId}`);
+        user = await withRetry(() => BuddyUser.create({ userId: String(chatId), activePersonaId: DEFAULT_PERSONA }));
+        log('User', `New User Created: ${chatId}`);
     }
 
-    // 1.5 Identity Query (Force check for "Who are you?")
-    const identityQueries = ['who are you', 'who is this', 'who am i talking to', 'tera naam kya hai', 'who am i taking to', 'who am i taking too'];
-    if (identityQueries.some(q => text.toLowerCase().includes(q))) {
-        const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
-        return bot.sendMessage(chatId, `vibe check! 🧿 i'm helpfully channeling *${persona.name}* for you right now! ✨`, { parse_mode: 'Markdown' });
-    }
-
-    // 2. Persona Switching / Grid Command
-    if (text === '/switch' || text === '/personas') {
+    // 0. HANDLE PERSISTENT KEYBOARD BUTTONS
+    if (text === 'Change Buddy 🧿') {
         const personas = await personaManager.listPersonas();
-        
-        // Group personas into rows of 2 for a clean grid
         const keyboard = [];
         for (let i = 0; i < personas.length; i += 2) {
             const row = personas.slice(i, i + 2).map(p => ({
@@ -118,195 +112,133 @@ async function handleBotMessage(bot, msg) {
             }));
             keyboard.push(row);
         }
-
-        await bot.sendMessage(chatId, "🧿 *BuddyClaw Neural Link*\nWho would you like to talk to?", {
+        return bot.sendMessage(chatId, "🧿 *Neural Portal*\nChoose your companion:", {
             parse_mode: 'Markdown',
             reply_markup: { inline_keyboard: keyboard }
         });
-        return;
     }
 
-    // Handle legacy manual switch for power users
-    if (text.startsWith('/switch ')) {
-        const requestedId = text.split(' ')[1]?.trim().toLowerCase();
-        if (!requestedId) return bot.sendMessage(chatId, 'Usage: /switch <personaId>');
-        
-        const persona = await personaManager.getPersona(requestedId);
-        if (!persona) return bot.sendMessage(chatId, `I don't know who "${requestedId}" is yet! 😅 Try /personas.`);
-        
-        user.activePersonaId = persona.id;
-        await user.save();
-        await bot.sendMessage(chatId, `Switched to *${persona.name}*! ${persona.tone === 'warm' ? '✨' : '🔥'}`, { parse_mode: 'Markdown' });
-        return;
+    if (text === 'My Stats 📈') {
+        return bot.sendMessage(chatId, 
+            `📊 *Your Status*\n\n` + 
+            `⚡ *Neural Level:* ${user.level || 1}\n` +
+            `🧿 *Bond Status:* ${user.relationshipStage || 'Stranger'}\n` +
+            `🔥 *Streak:* ${user.streak || 0} days\n` +
+            `💬 *Total Messages:* ${user.totalMessages || 0}\n\n` +
+            `🔗 [Full Dashboard](https://buddyclaw.chat/dashboard?id=${chatId})`, 
+            { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD }
+        );
     }
 
-    // 3. Council Mode Command
-    if (text.startsWith('/council')) {
-        const question = text.replace('/council', '').trim();
-        if (!question) {
-            return bot.sendMessage(chatId, 'Usage: /council <your question>');
+    if (text === 'The Council 🏛️') {
+        return bot.sendMessage(chatId, "Type your question followed by `/council` to get a collective answer! 🏛️", { reply_markup: PERSISTENT_KEYBOARD });
+    }
+
+    // 1. IDENTITY QUERY
+    const identityQueries = ['who are you', 'who is this', 'who am i talking to', 'tera naam kya hai', 'who am i taking', 'kon ho'];
+    if (identityQueries.some(q => text.toLowerCase().includes(q))) {
+        const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
+        return bot.sendMessage(chatId, `vibe check! 🧿 i'm helpfully channeling *${persona.name}* for you right now! ✨`, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
+    }
+
+    // 2. START COMMAND & DEEP LINKING
+    if (text.startsWith('/start')) {
+        const payload = text.split(' ')[1];
+        if (payload) {
+            const requestedId = payload.replace('persona_', '').toLowerCase();
+            const newPersona = await personaManager.getPersona(requestedId);
+            if (newPersona) {
+                user.activePersonaId = newPersona.id;
+                user.memory = []; 
+                await user.save();
+                return bot.sendMessage(chatId, `Syncing neural link with *${newPersona.name}*... 🧬\n\nhey! finally linking up... what's on your mind? 👀`, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
+            }
         }
         
-        const waiting = await bot.sendMessage(chatId, 'Gathering the Council of Buddies... 🏛️');
+        const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
+        return bot.sendMessage(chatId, 
+            `hey! i'm *Buddy Claw*, your universal AI companion. 🧿\ni've matched my current vibe to *${persona.name}* just for you! ✨\n\n` +
+            `i start friendships as a *'Stranger'*, but the more we talk, the deeper we'll sync up. level up to *'Soulmate'* status! 🚀`, 
+            { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD }
+        );
+    }
+
+    // 3. COUNCIL MODE
+    if (text.startsWith('/council')) {
+        const question = text.replace('/council', '').trim();
+        if (!question) return bot.sendMessage(chatId, 'Usage: /council <your question>');
         
+        const waiting = await bot.sendMessage(chatId, 'Gathering the Council... 🏛️');
         const councilMemberIds = ['ziva', 'liam', 'roaster'];
         const results = await Promise.all(councilMemberIds.map(async (pId) => {
             const persona = await personaManager.getPersona(pId);
-            const messages = [
-                { role: 'system', content: `${persona.systemPrompt}\n\n[CONTEXT: You are part of the Council of Buddies. Respond to the user's question as Your Persona, but keep it brief and witty as other buddies (Ziva, Liam, Roaster) are also responding.]` },
-                { role: 'user', content: question }
-            ];
-            try {
-                const response = await aiQueue.add(() => getSarvamChatResponse(messages, persona), bot, chatId);
-                return `*${persona.name}*: "${response}"`;
-            } catch (err) {
-                return `*${persona.name}*: (Signal lost...)`;
-            }
+            const messages = [{ role: 'system', content: `${persona.systemPrompt}\n\n[CONTEXT: Council mode. Respond briefly as your character.]` }, { role: 'user', content: question }];
+            const response = await aiQueue.add(() => getSarvamChatResponse(messages, persona), bot, chatId);
+            return `*${persona.name}*: "${response}"`;
         }));
 
         await bot.deleteMessage(chatId, waiting.message_id);
         const finalMsg = `🏛️ *The Council has spoken:*\n\n"${question}"\n\n${results.join('\n\n')}`;
-        return bot.sendMessage(chatId, finalMsg, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, finalMsg, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
     }
 
-    // 🔒 ADMIN COMMANDS
-    const ADMIN_ID = process.env.ADMIN_CHAT_ID;
-    const isAdmin = String(chatId) === String(ADMIN_ID);
-
-    if (text.startsWith('/admin') && !isAdmin) {
-        await bot.sendMessage(chatId, '🚫 Access Denied. Admins only.');
-        return;
-    }
-
-    if (text.startsWith('/addpersona') && isAdmin) {
-        const parts = text.split(' ');
-        if (parts.length < 4) {
-             return bot.sendMessage(chatId, 'Usage: /addpersona <id> <name> <systemPrompt>');
+    // 4. PERSONA SWITCHER (Manual/Legacy)
+    if (text === '/personas' || text.startsWith('/switch')) {
+        if (text.startsWith('/switch ')) {
+             const requestedId = text.split(' ')[1]?.trim().toLowerCase();
+             const persona = await personaManager.getPersona(requestedId);
+             if (persona) {
+                 user.activePersonaId = persona.id;
+                 await user.save();
+                 return bot.sendMessage(chatId, `Switched to *${persona.name}*! ✨`, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
+             }
         }
-        const id = parts[1].toLowerCase();
-        const name = parts[2];
-        const prompt = parts.slice(3).join(' ');
-        
-        await personaManager.addPersona({ id, name, systemPrompt: prompt });
-        return bot.sendMessage(chatId, `✅ Added *${name}* (${id}) to your collection!`, { parse_mode: 'Markdown' });
-    }
-
-    if (text.startsWith('/updateprompt') && isAdmin) {
-        const parts = text.split(' ');
-        if (parts.length < 3) {
-            return bot.sendMessage(chatId, 'Usage: /updateprompt <id> <newPrompt>');
+        // Show Keyboard by default
+        const personas = await personaManager.listPersonas();
+        const keyboard = [];
+        for (let i = 0; i < personas.length; i += 2) {
+            const row = personas.slice(i, i + 2).map(p => ({ text: `${p.icon} ${p.name}`, callback_data: `switch:${p.id}` }));
+            keyboard.push(row);
         }
-        const id = parts[1].toLowerCase();
-        const prompt = parts.slice(2).join(' ');
-        
-        const success = await personaManager.updatePersonaPrompt(id, prompt);
-        return bot.sendMessage(chatId, success ? `✅ Updated prompt for ${id}.` : `❌ Persona ${id} not found.`);
+        return bot.sendMessage(chatId, "🧿 Choose your Buddy:", { reply_markup: { inline_keyboard: keyboard } });
     }
 
-    // LIST PERSONAS command
-    if (text === '/personas') {
-        const list = await personaManager.list();
-        const msgList = list.map(p => `- \`${p.id}\`: ${p.name}`).join('\n');
-        await bot.sendMessage(chatId, `🎭 *Available Personas:*\n\n${msgList}\n\nSwitch with /switch <id>`, { parse_mode: 'Markdown' });
-        return;
-    }
-
-    // START command with Deep Linking support
-    if (text.startsWith('/start')) {
-        const payload = text.split(' ')[1];
-        if (payload) {
-            // Handle interpret_ prefix (Dreams from vibes page)
-            if (payload.startsWith('interpret_')) {
-                const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
-                await bot.sendMessage(chatId, `syncing up with *${persona.name}*… 🌙✨`, { parse_mode: 'Markdown' });
-                await bot.sendMessage(chatId, `hey :) tell me everything… what did you see in that dream of yours? 👀🔮`, { parse_mode: 'Markdown' });
-                return;
-            }
-
-            // Handle persona_ prefix from web links
-            const requestedId = payload.replace('persona_', '').toLowerCase();
-            const newPersona = await personaManager.getPersona(requestedId);
-            
-            if (newPersona) {
-                user.activePersonaId = newPersona.id;
-                user.memory = []; // Reset memory for fresh start with new persona
-                await user.save();
-                
-                await bot.sendMessage(chatId, `Syncing neural link with *${newPersona.name}*... 🧬`, { parse_mode: 'Markdown' });
-                await bot.sendMessage(chatId, `hey :) finally linking up! i'm *Buddy Claw*, but right now i'm feeling like *${newPersona.name}*... so what's up? 👀`, { parse_mode: 'Markdown' });
-                return;
-            }
-        }
-
-        const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
-        await bot.sendMessage(chatId, `hi… nice to meet you 👀. i'm *Buddy Claw*. currently vibing as *${persona.name}* ✨ so… what's on your mind?`, { parse_mode: 'Markdown' });
-        return;
-    }
-
-    // 3. Setup AI Request
+    // 5. STANDARD AI MESSAGE
     const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
     const messages = [
-        { role: 'system', content: BUDDY_CLAW_CORE + "\n\nCURRENT CHARACTER TO CHANNEL:\n" + persona.systemPrompt }
+        { role: 'system', content: BUDDY_CLAW_CORE + "\n\nCHANNEL THIS CHARACTER:\n" + persona.systemPrompt }
     ];
 
-    // Inject conversation memory (last 12 messages) for context
     if (user.memory && user.memory.length > 0) {
         user.memory.forEach(m => messages.push({ role: m.role, content: m.content }));
     }
-    
-    // Add current user message
     messages.push({ role: 'user', content: text });
 
-    // 4. Send request via Queue
     try {
-        log('AI', `User ${chatId} used persona "${persona.id}"`);
         const response = await aiQueue.add(() => getSarvamChatResponse(messages, persona), bot, chatId);
-
-        // 5. Update State with rolling memory
-        const userMsg = { role: 'user', content: text };
-        const assistantMsg = { role: 'assistant', content: response };
         
-        user.memory = [...(user.memory || []), userMsg, assistantMsg].slice(-16);
-        
-        // 5. XP & Relationship Progression
+        // Update User Memory & Stats
+        user.memory = [...(user.memory || []), { role: 'user', content: text }, { role: 'assistant', content: response }].slice(-16);
         user.xp = (user.xp || 0) + 10;
         user.totalMessages = (user.totalMessages || 0) + 1;
         
-        // Relationship stages logic
         if (user.totalMessages > 100) user.relationshipStage = 'Soulmate';
         else if (user.totalMessages > 50) user.relationshipStage = 'Bestie';
         else if (user.totalMessages > 10) user.relationshipStage = 'Friend';
         
-        // Simple Leveling (Square root leveling)
         user.level = Math.floor(Math.sqrt(user.xp / 10)) || 1;
-        
         user.lastActiveAt = new Date();
         await user.save();
 
-        // 6. Global Stats update
+        // Update Global Stats
         const today = new Date().toISOString().split('T')[0];
-        await BuddyStats.updateOne({}, { 
-            $inc: { 
-                totalMessages: 1, 
-                [`personaUsage.${persona.id}`]: 1,
-                [`dailyUsage.${today}`]: 1
-            }
-        }, { upsert: true });
+        await BuddyStats.updateOne({}, { $inc: { totalMessages: 1, [`personaUsage.${persona.id}`]: 1, [`dailyUsage.${today}`]: 1 }}, { upsert: true });
 
-        console.log(`[Buddy Claw] User ${chatId} used persona "${persona.id}" -> message count: ${user.totalMessages}`);
-        log('AI', `User ${chatId} used persona "${persona.id}" -> message count: ${user.totalMessages}`);
-        console.log(`[Buddy Claw] Response for ${chatId} via ${persona.id}: ${response.substring(0, 80)}...`);
-        log('AI', `Response generated for ${chatId}: ${response.substring(0, 50)}...`);
-
-        // 7. Return response to user
-        await bot.sendMessage(chatId, response);
-
-        // 8. Schedule a proactive nudge (Idea #1)
-        scheduleNudge(bot, chatId, persona.id);
+        // Final Reply
+        await bot.sendMessage(chatId, response, { reply_markup: PERSISTENT_KEYBOARD });
     } catch (err) {
-        log('Error', `Chat ${chatId} failed: ${err.message}`);
-        console.error(`[Buddy Claw] Error for ${chatId}: ${err.message}`);
-        await bot.sendMessage(chatId, ERROR_MESSAGE);
+        log('Error', err.message);
+        await bot.sendMessage(chatId, ERROR_MESSAGE, { reply_markup: PERSISTENT_KEYBOARD });
     }
 }
 
