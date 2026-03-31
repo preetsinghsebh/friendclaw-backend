@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { withRetry } from './database.js';
 import Log from './models/Log.js';
 
 /**
@@ -208,7 +209,7 @@ export class VectorMemory {
         if (this.mode === 'json') {
             memories = this.persistentMap.get(chatId) || [];
         } else {
-            const doc = await this.model.findOne({ chatId, service: this.service });
+            const doc = await withRetry(() => this.model.findOne({ chatId, service: this.service }));
             memories = doc ? doc.anchors : [];
         }
 

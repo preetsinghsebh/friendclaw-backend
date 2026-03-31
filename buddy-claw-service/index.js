@@ -2,7 +2,7 @@ import '../shared/env.js';
 import express from 'express';
 import cors from 'cors';
 import TelegramBot from 'node-telegram-bot-api';
-import { connectDB } from '../shared/database.js';
+import { connectDB, withRetry } from '../shared/database.js';
 import { Telemetry } from '../shared/persistence.js';
 import { personaManager } from './persona-manager.js';
 import BuddyUser from './models/User.js';
@@ -66,6 +66,7 @@ const aiQueue = new AiQueue();
  * Core Logic: Message Handler
  */
 async function handleBotMessage(bot, msg) {
+    console.log('DEBUG: handleBotMessage entered', msg.text || '(no text)');
     const chatId = msg.chat?.id;
     const text = (msg.text || msg.caption || '').trim();
     if (!chatId || !text) return;
@@ -73,7 +74,7 @@ async function handleBotMessage(bot, msg) {
     console.log(`[Buddy Claw] Message received from ${chatId}: ${text.slice(0, 120)}`);
 
     // 1. Identify User (Create if not exists)
-    let user = await BuddyUser.findOne({ userId: String(chatId) });
+    let user = await withRetry(() => BuddyUser.findOne({ userId: String(chatId) }));
     if (!user) {
         user = new BuddyUser({ userId: String(chatId), activePersonaId: DEFAULT_PERSONA });
         await user.save();
@@ -284,7 +285,7 @@ async function start() {
         const { id } = req.query;
         if (!id) return res.status(400).json({ error: 'Missing user ID' });
 
-        const user = await BuddyUser.findOne({ userId: String(id) });
+        const user = await withRetry(() => BuddyUser.findOne({ userId: String(id) }));
         if (!user) return res.status(404).json({ error: 'User not found' });
 
         const activePersona = await personaManager.getPersona(user.activePersonaId);
@@ -316,7 +317,7 @@ async function start() {
     // NEW ANALYTICS ENDPOINTS
     app.get('/stats', async (req, res) => {
         try {
-            const statsDoc = await BuddyStats.findOne({});
+            const statsDoc = await withRetry(() => BuddyStats.findOne({}));
             const totalUsersAgg = await BuddyUser.countDocuments();
 
             const personaEntries = (() => {
@@ -355,7 +356,7 @@ async function start() {
 
     app.get('/user/:id', async (req, res) => {
         try {
-            const user = await BuddyUser.findOne({ userId: req.params.id });
+            const user = await withRetry(() => BuddyUser.findOne({ userId: req.params.id }));
             if (!user) return res.status(404).json({ error: 'User not found' });
             const activePersona = await personaManager.getPersona(user.activePersonaId);
             res.json({
@@ -378,7 +379,7 @@ async function start() {
         const { id, personaId } = req.body;
         if (!id || !personaId) return res.status(400).json({ error: 'Missing parameters' });
 
-        const user = await BuddyUser.findOne({ userId: String(id) });
+        const user = await withRetry(() => BuddyUser.findOne({ userId: String(id) }));
         if (!user) return res.status(404).json({ error: 'User not found' });
 
         const persona = await personaManager.getPersona(personaId.toLowerCase());

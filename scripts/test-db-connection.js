@@ -21,7 +21,10 @@ async function testConnection() {
     console.log(`🔗 Target: ${uri.split('@')[1]}`); // Log only the host for security
 
     try {
-        await mongoose.connect(uri);
+        await mongoose.connect(uri, {
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
+        });
         console.log('✅ SUCCESS! Your project is now connected to the Cloud "BuddyClaw" database.');
         
         // Check collections

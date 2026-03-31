@@ -12,7 +12,8 @@ export const connectDB = async () => {
         console.log(`[Database] Attempting connection to: ${maskedUri}`);
         
         await mongoose.connect(MONGO_URI, {
-            serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of default
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
         });
         
         isConnected = true;

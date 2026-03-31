@@ -14,7 +14,8 @@ export const connectDB = async () => {
     try {
         console.log(`[Database] Connecting to MongoDB at ${MONGO_URI.split('://')[1].split('/')[0]}...`);
         await mongoose.connect(MONGO_URI, {
-            serverSelectionTimeoutMS: 5000, // 5 second timeout
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
         });
         isConnected = true;
         console.log(`[Database] MongoDB Connected Successfully`);
@@ -24,4 +25,22 @@ export const connectDB = async () => {
         console.error(`[Database] Error Stack: ${error.stack}`);
         return false;
     }
+};
+
+/**
+ * Utility to retry a database operation with exponential backoff
+ */
+export const withRetry = async (operation, maxRetries = 3, initialDelay = 1000) => {
+    let lastError;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            const delay = initialDelay * Math.pow(2, i);
+            console.warn(`[Database] Operation failed (attempt ${i + 1}/${maxRetries}), retrying in ${delay}ms: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    throw lastError;
 };
