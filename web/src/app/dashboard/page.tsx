@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
     Activity, 
@@ -21,7 +21,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { PERSONAS } from "@/lib/personas";
+import { PERSONAS, PERSONA_THEMES } from "@/lib/personas";
+import type { PersonaTheme } from "@/lib/personas";
 
 interface UserProfile {
     nicknames: string[];
@@ -36,6 +37,13 @@ interface UserProfile {
     relationshipStage?: string;
     streak?: number;
 }
+
+const DEFAULT_THEME: PersonaTheme = {
+    primary: "#FFB300",
+    secondary: "#FCD34D",
+    orb: "rgba(255,179,0,0.35)",
+    vibe: "/assets/companions/ziva.jpg"
+};
 
 // Separate content component to use searchParams safely
 function DashboardContent() {
@@ -173,32 +181,75 @@ function DashboardContent() {
     }
 
     const profile = userData?.profile || { nicknames: [], facts: [], streakCount: 0, moodScore: 50, lastChatDate: "" };
+    const personaId = profile.activePersonaId || "ziva";
+    const personaMeta = PERSONAS.find((p) => p.id === personaId) || PERSONAS[0];
+    const personaTheme = PERSONA_THEMES[personaMeta.id] || DEFAULT_THEME;
+    const xpFillWidth = Math.min((profile.xp || 0) / 10, 100);
+    const glowTransition = { duration: 1.5, ease: "easeInOut" };
+    const headerStyle: CSSProperties = {
+        boxShadow: `0 30px 70px ${personaTheme.secondary}20`,
+        borderColor: `${personaTheme.secondary}30`,
+        borderWidth: "1px",
+        borderStyle: "solid"
+    };
+    const sectionStyle: CSSProperties = {
+        borderColor: `${personaTheme.secondary}30`,
+        boxShadow: `0 20px 45px ${personaTheme.secondary}15`
+    };
+    const vibeStyle: CSSProperties = {
+        backgroundImage: `url(${personaTheme.vibe})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        opacity: 0.08,
+        filter: "blur(40px)",
+        mixBlendMode: "screen"
+    };
+    const xpGradient = `linear-gradient(120deg, ${personaTheme.primary}, ${personaTheme.secondary})`;
+    const memoryUserBorder = `${personaTheme.secondary}40`;
+    const memoryCompanionBorder = personaTheme.secondary;
 
     return (
         <div className="min-h-screen bg-[#05050A] text-white p-4 md:p-8">
             {/* Ambient Background */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-[#FFB300]/5 blur-[120px]" />
-                <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/5 blur-[120px]" />
+                <motion.div
+                    className="absolute top-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full blur-[140px]"
+                    animate={{ backgroundColor: personaTheme.primary }}
+                    transition={glowTransition}
+                    style={{ opacity: 0.35 }}
+                />
+                <motion.div
+                    className="absolute bottom-[-15%] left-[-10%] w-[30%] h-[30%] rounded-full blur-[140px]"
+                    animate={{ backgroundColor: personaTheme.secondary }}
+                    transition={glowTransition}
+                    style={{ opacity: 0.45 }}
+                />
+                <motion.div
+                    className="absolute inset-0 pointer-events-none"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={glowTransition}
+                    style={vibeStyle}
+                />
             </div>
 
             <div className="max-w-6xl mx-auto relative z-10">
                 {/* Header */}
-                <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-12">
+                <header className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-12 rounded-3xl bg-white/5 border border-white/10 p-6 backdrop-blur-xl" style={headerStyle}>
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-[#FFB300] text-xs font-bold tracking-tighter uppercase mb-2">
-                             <LayoutDashboard className="w-4 h-4" /> 
-                             BuddyClaw OS v1.0
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-light">
-                                  <span className="font-medium text-[#FFB300]">{profile.nicknames[0] || "Friend"}</span>
-                                <span className="ml-4 inline-flex items-center justify-center px-4 py-1.5 bg-[#FFB300] text-[#05050A] rounded-full text-[10px] font-black tracking-widest uppercase">
-                                    LVL {profile.level || 1}
-                                </span>
-                                <span className="ml-2 inline-flex items-center justify-center px-3 py-1.5 border border-[#FFB300]/30 text-[#FFB300] rounded-full text-[10px] font-bold tracking-widest uppercase bg-[#FFB300]/5">
-                                    {profile.relationshipStage || "Stranger"}
-                                </span>
-                            </h1>
+                        <div className="flex items-center gap-2 text-xs font-bold tracking-tighter uppercase mb-2" style={{ color: personaTheme.secondary }}>
+                            <LayoutDashboard className="w-4 h-4" /> 
+                            BuddyClaw OS v1.0
+                       </div>
+                        <h1 className="text-4xl md:text-5xl font-light flex flex-wrap items-center gap-3">
+                            <span className="font-medium" style={{ color: personaTheme.primary }}>{profile.nicknames[0] || "Friend"}</span>
+                            <span className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase" style={{ backgroundColor: personaTheme.primary, color: "#05050A", boxShadow: `0 0 25px ${personaTheme.secondary}55` }}>
+                                LVL {profile.level || 1}
+                            </span>
+                            <span className="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase" style={{ borderColor: `${personaTheme.secondary}40`, backgroundColor: `${personaTheme.secondary}10`, color: personaTheme.secondary }}>
+                                {profile.relationshipStage || "Stranger"}
+                            </span>
+                        </h1>
                         <p className="text-white/40">Your neural connections are stable across 25+ across personas.</p>
                         
                         {/* XP Progress Bar */}
@@ -207,8 +258,8 @@ function DashboardContent() {
                                 <span>Neural Progression</span>
                                 <span>{profile.xp || 0} / 1000 XP</span>
                             </div>
-                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-[#FFB300]" style={{ width: `${Math.min((profile.xp || 0) / 10, 100)}%` }} />
+                            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden border border-white/5">
+                                <div className="h-full" style={{ width: `${xpFillWidth}%`, background: xpGradient, transition: "width 0.6s ease" }} />
                             </div>
                         </div>
                         
@@ -221,6 +272,11 @@ function DashboardContent() {
                                     onChange={(e) => handleSwitchPersona(e.target.value)}
                                     disabled={switching}
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#FFB300]/50 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                                    style={{
+                                        borderColor: `${personaTheme.secondary}40`,
+                                        boxShadow: `0 0 25px ${personaTheme.secondary}20`,
+                                        color: personaTheme.secondary
+                                    }}
                                  >
                                     {availablePersonas.map(p => (
                                         <option key={p.id} value={p.id} className="bg-[#05050A] text-white">
@@ -233,7 +289,7 @@ function DashboardContent() {
                         </div>
                     </div>
                     <div className="flex gap-4">
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4" style={sectionStyle}>
                             <div className="p-3 bg-red-500/10 rounded-xl">
                                 <Flame className="w-6 h-6 text-red-500" />
                             </div>
@@ -242,7 +298,7 @@ function DashboardContent() {
                                 <div className="text-[10px] uppercase tracking-widest text-white/40">Global Streak</div>
                             </div>
                         </div>
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4" style={sectionStyle}>
                             <div className="p-3 bg-[#FFB300]/10 rounded-xl">
                                 <Heart className="w-6 h-6 text-[#FFB300]" />
                             </div>
@@ -258,7 +314,7 @@ function DashboardContent() {
                     {/* Main Stats Column */}
                     <div className="lg:col-span-2 space-y-8">
                         {/* Memory Section */}
-                        <section className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
+                        <section className="bg-white/5 border rounded-3xl p-8 backdrop-blur-xl" style={sectionStyle}>
                             <div className="flex items-center justify-between mb-8">
                                 <h2 className="text-xl font-medium flex items-center gap-3">
                                     <Activity className="w-5 h-5 text-[#FFB300]" /> Core Memory Bank
@@ -297,11 +353,15 @@ function DashboardContent() {
                                     </h3>
                                     <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                                         {profile.memory && profile.memory.length > 0 ? profile.memory.map((m, i) => (
-                                            <div key={i} className={`p-3 rounded-xl text-xs leading-relaxed ${
-                                                m.role === 'user' 
-                                                ? 'bg-white/5 text-white/70 ml-4 border-l-2 border-[#FFB300]/30' 
-                                                : 'bg-[#FFB300]/5 text-[#FFB300] mr-4 border-l-2 border-[#FFB300]'
-                                            }`}>
+                                            <div 
+                                                key={i}
+                                                className={`p-3 rounded-xl text-xs leading-relaxed ${m.role === 'user' ? 'bg-white/5 text-white/70 ml-4' : 'mr-4'}`}
+                                                style={{
+                                                    borderLeft: `2px solid ${m.role === 'user' ? memoryUserBorder : memoryCompanionBorder}`,
+                                                    backgroundColor: m.role === 'user' ? 'rgba(255,255,255,0.08)' : `${personaTheme.secondary}10`,
+                                                    color: m.role === 'user' ? 'rgba(255,255,255,0.7)' : personaTheme.secondary
+                                                }}
+                                            >
                                                 <span className="opacity-40 uppercase text-[8px] font-bold block mb-1">
                                                     {m.role === 'user' ? 'Transmission Inbound' : 'Neural Echo'}
                                                 </span>
@@ -326,7 +386,7 @@ function DashboardContent() {
                         </section>
 
                         {/* Council Mode Section */}
-                        <section className="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
+                        <section className="bg-white/5 border rounded-3xl p-8 backdrop-blur-xl" style={sectionStyle}>
                             <div className="flex items-center justify-between mb-8">
                                 <h2 className="text-xl font-medium flex items-center gap-3">
                                     <Users className="w-5 h-5 text-[#FFB300]" /> Council of Buddies
@@ -341,12 +401,14 @@ function DashboardContent() {
                                         value={councilQuestion}
                                         onChange={(e) => setCouncilQuestion(e.target.value)}
                                         placeholder="Ask the council for advice..." 
-                                        className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-[#FFB300]/50"
+                                        className="flex-1 bg-white/5 border rounded-2xl px-6 py-4 text-sm focus:outline-none"
+                                        style={{ borderColor: `${personaTheme.secondary}40` }}
                                     />
                                     <button 
                                         onClick={handleAskCouncil}
                                         disabled={askingCouncil || !councilQuestion}
-                                        className="px-8 bg-[#FFB300] text-[#05050A] rounded-2xl font-bold text-sm disabled:opacity-50"
+                                        className="px-8 rounded-2xl font-bold text-sm disabled:opacity-50"
+                                        style={{ backgroundColor: personaTheme.primary, color: "#05050A" }}
                                     >
                                         {askingCouncil ? "GATHERING..." : "CONSULT"}
                                     </button>
@@ -355,7 +417,7 @@ function DashboardContent() {
                                 {councilResults && (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                         {councilResults.map((ans, i) => (
-                                            <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group">
+                                            <div key={i} className="bg-white/5 border rounded-2xl p-6 relative overflow-hidden group" style={sectionStyle}>
                                                 <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
                                                     <Sparkles className="w-8 h-8" />
                                                 </div>

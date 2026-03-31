@@ -1,6 +1,12 @@
 export type Message = { sender: 'user' | 'bot', text: string, delayMs: number }
 
 export type PersonaCategory = 'Love & Drama 💔' | 'Safe Space 🫂' | 'Anime Mode 🌸' | 'Chaos Mode 🔥' | 'Mind Reset 🌿' | 'Celeb Energy';
+export type PersonaTheme = {
+    primary: string;
+    secondary: string;
+    orb: string;
+    vibe: string;
+};
 
 export type PersonaData = {
     id: string
@@ -366,3 +372,31 @@ export const PERSONAS: PersonaData[] = [
         ]
     }
 ];
+
+export const PERSONA_THEMES: Record<string, PersonaTheme> = {
+    ziva: { primary: '#E8197D', secondary: '#FF85B0', orb: 'rgba(232,25,125,0.35)', vibe: '/assets/companions/ziva.jpg' },
+    liam: { primary: '#0EA5E9', secondary: '#22D3EE', orb: 'rgba(14,165,233,0.4)', vibe: '/assets/companions/liam.png' },
+    emma: { primary: '#A855F7', secondary: '#F472B6', orb: 'rgba(168,85,247,0.35)', vibe: '/assets/companions/emma.png' },
+    'confident-zane': { primary: '#EF4444', secondary: '#F97316', orb: 'rgba(239,68,68,0.4)', vibe: '/assets/companions/zane.png' },
+    'caring-listener': { primary: '#94A3B8', secondary: '#C4B5FD', orb: 'rgba(148,163,184,0.35)', vibe: '/assets/companions/listener.jpg' },
+    'calm-guide': { primary: '#818CF8', secondary: '#A5B4FC', orb: 'rgba(129,140,248,0.35)', vibe: '/assets/companions/monk.jpg' },
+    'sleep-luna': { primary: '#6366F1', secondary: '#A78BFA', orb: 'rgba(99,102,241,0.35)', vibe: '/assets/companions/luna.jpg' },
+    'mindful-maya': { primary: '#FBBF24', secondary: '#22D3EE', orb: 'rgba(251,191,36,0.35)', vibe: '/assets/companions/maya.jpg' },
+    'warm-grandma': { primary: '#F97316', secondary: '#FDE68A', orb: 'rgba(249,115,22,0.35)', vibe: '/assets/companions/nani.png' },
+    bua: { primary: '#F472B6', secondary: '#A855F7', orb: 'rgba(244,114,182,0.35)', vibe: '/assets/companions/bua.png' },
+    chill_chacha: { primary: '#D97706', secondary: '#FDE68A', orb: 'rgba(217,119,6,0.35)', vibe: '/assets/companions/chacha.png' },
+    big_sister: { primary: '#10B981', secondary: '#06B6D4', orb: 'rgba(16,185,129,0.35)', vibe: '/assets/companions/big_sis.png' },
+    roaster: { primary: '#22C55E', secondary: '#14B8A6', orb: 'rgba(34,197,94,0.35)', vibe: '/assets/companions/roaster.png' },
+    midnight: { primary: '#312E81', secondary: '#6366F1', orb: 'rgba(49,46,129,0.4)', vibe: '/assets/companions/midnight.png' },
+    bestie: { primary: '#F59E0B', secondary: '#EC4899', orb: 'rgba(245,158,11,0.35)', vibe: '/assets/companions/bestie.png' },
+    hype: { primary: '#FF4500', secondary: '#FACC15', orb: 'rgba(255,69,0,0.35)', vibe: '/assets/companions/hype.jpg' },
+    gojo: { primary: '#7C3AED', secondary: '#14B8A6', orb: 'rgba(124,58,237,0.35)', vibe: '/assets/companions/gojo.jpg' },
+    bakugo: { primary: '#F97316', secondary: '#FCD34D', orb: 'rgba(249,115,22,0.35)', vibe: '/assets/companions/bakugo.jpg' },
+    luffy: { primary: '#DC2626', secondary: '#F97316', orb: 'rgba(220,38,38,0.35)', vibe: '/assets/companions/luffy.jpg' },
+    naruto: { primary: '#F97316', secondary: '#FCD34D', orb: 'rgba(249,115,22,0.35)', vibe: '/assets/companions/naruto.jpg' },
+    'taylin-swift': { primary: '#EC4899', secondary: '#F472B6', orb: 'rgba(236,72,153,0.35)', vibe: '/assets/companions/taylor.jpg' },
+    'dax-johnson': { primary: '#EF4444', secondary: '#EAB308', orb: 'rgba(239,68,68,0.35)', vibe: '/assets/companions/therock.jpg' },
+    'kain-west': { primary: '#9333EA', secondary: '#C084FC', orb: 'rgba(147,51,234,0.35)', vibe: '/assets/companions/kanye.jpg' },
+    'kendro-lamar': { primary: '#3B82F6', secondary: '#06B6D4', orb: 'rgba(59,130,246,0.35)', vibe: '/assets/companions/lamar.jpg' },
+    'zay-rukh': { primary: '#FBBF24', secondary: '#F97316', orb: 'rgba(251,191,36,0.35)', vibe: '/assets/companions/srk.jpg' }
+};
