@@ -173,8 +173,33 @@ async function handleBotMessage(bot, msg) {
         return;
     }
 
-    // START command
+    // START command with Deep Linking support
     if (text.startsWith('/start')) {
+        const payload = text.split(' ')[1];
+        if (payload) {
+            // Handle interpret_ prefix (Dreams from vibes page)
+            if (payload.startsWith('interpret_')) {
+                const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
+                await bot.sendMessage(chatId, `Syncing cosmic channel with *${persona.name}* for dream interpretation... 🌙✨`, { parse_mode: 'Markdown' });
+                await bot.sendMessage(chatId, `Hey! I'm ready to interpret your dream. What did you see in your subconscious? 🔮`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Handle persona_ prefix from web links
+            const requestedId = payload.replace('persona_', '').toLowerCase();
+            const newPersona = await personaManager.getPersona(requestedId);
+            
+            if (newPersona) {
+                user.activePersonaId = newPersona.id;
+                user.memory = []; // Reset memory for fresh start with new persona
+                await user.save();
+                
+                await bot.sendMessage(chatId, `Syncing neural link with *${newPersona.name}*... 🧬`, { parse_mode: 'Markdown' });
+                await bot.sendMessage(chatId, `Hey! I'm *Buddy Claw*, your universal AI companion. Currently, I'm channeling *${newPersona.name}* for you. ✨`, { parse_mode: 'Markdown' });
+                return;
+            }
+        }
+
         const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
         await bot.sendMessage(chatId, `Hey! I'm *Buddy Claw*, your universal AI companion. Currently, I'm channeling *${persona.name}* for you. ✨`, { parse_mode: 'Markdown' });
         return;

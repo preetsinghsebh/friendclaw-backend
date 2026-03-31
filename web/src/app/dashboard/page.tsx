@@ -15,10 +15,13 @@ import {
     UserCircle,
     Users,
     Share2,
-    CheckCircle2
+    CheckCircle2,
+    User
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
+import { PERSONAS } from "@/lib/personas";
 
 interface UserProfile {
     nicknames: string[];
@@ -385,15 +388,23 @@ function DashboardContent() {
                                                 <Sparkles className="w-12 h-12" />
                                             </div>
                                             <div className="flex items-center gap-4 mb-4">
-                                                <div className="w-16 h-16 rounded-xl bg-blue-500/20 border border-white/10 overflow-hidden">
-                                                    {/* Persona avatar placeholder */}
-                                                    <div className="w-full h-full flex items-center justify-center bg-gray-800 text-2xl">
-                                                        {p.name?.[0] || '🤖'}
-                                                    </div>
+                                                <div className="w-16 h-16 rounded-xl bg-white/5 border border-white/10 overflow-hidden relative">
+                                                    {PERSONAS.find(persona => persona.id === p.id)?.imageUrl ? (
+                                                        <Image 
+                                                            src={PERSONAS.find(persona => persona.id === p.id)!.imageUrl!} 
+                                                            alt={p.name}
+                                                            fill
+                                                            className="object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center bg-gray-800 text-2xl">
+                                                            {PERSONAS.find(persona => persona.id === p.id)?.icon || p.name?.[0] || '🤖'}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <h3 className="text-lg font-medium">{p.name || "Unknown Agent"}</h3>
-                                                    <p className="text-xs text-[#FFB300]">Stable Attachment</p>
+                                                    <p className="text-xs text-[#FFB300]">{PERSONAS.find(persona => persona.id === p.id)?.tag || 'Stable Attachment'}</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-4 pt-4 border-t border-white/5">
