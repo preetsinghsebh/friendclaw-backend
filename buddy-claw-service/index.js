@@ -75,7 +75,9 @@ class AiQueue {
             typingInterval = setInterval(() => bot.sendChatAction(chatId, 'typing').catch(() => {}), 4000);
         }
         try {
-            const result = await task();
+            // Add a 20-second timeout to any AI task to prevent queue hanging
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI Request Timeout')), 20000));
+            const result = await Promise.race([task(), timeoutPromise]);
             resolve(result);
         } catch (err) {
             reject(err);
@@ -275,22 +277,26 @@ async function handleBotMessage(bot, msg) {
         }
 
         // --- MEMORY JAR EXTRACTION (Idea #1) ---
+        // We do NOT await this to keep the conversation fast! 🚀
         if (text.length > 5 && !text.startsWith('/') && !text.startsWith('My Stats') && !text.startsWith('Change Buddy') && !text.startsWith('The Council')) {
-            try {
-                const memoryPrompt = [
-                    { role: 'system', content: `[ACTION: DATA EXTRACTION]\nYou are a memory module. Look at the user's message: "${text}". Does it contain a personal fact about them (like their name, age, job, pet, favorite food, or a hobby)? If YES, extract only the fact as a short bullet point. If NO, reply "NONE".` }
-                ];
-                // Use the active persona instead of a fake system one to prevent crashes
-                const fact = await getSarvamChatResponse(memoryPrompt, persona);
-                if (fact && fact !== 'NONE' && !fact.includes('NONE') && fact.length < 100) {
-                    if (!user.facts.includes(fact)) {
-                        user.facts.push(fact);
-                        if (user.facts.length > 20) user.facts.shift();
+            (async () => {
+                try {
+                    const memoryPrompt = [
+                        { role: 'system', content: `[ACTION: DATA EXTRACTION]\nYou are a memory module. Look at the user's message: "${text}". Does it contain a personal fact about them (like their name, age, job, pet, favorite food, or a hobby)? If YES, extract only the fact as a short bullet point. If NO, reply "NONE".` }
+                    ];
+                    const fact = await getSarvamChatResponse(memoryPrompt, persona);
+                    if (fact && fact !== 'NONE' && !fact.includes('NONE') && fact.length < 100) {
+                        const updatedUser = await BuddyUser.findOne({ userId: String(chatId) });
+                        if (updatedUser && !updatedUser.facts.includes(fact)) {
+                            updatedUser.facts.push(fact);
+                            if (updatedUser.facts.length > 20) updatedUser.facts.shift();
+                            await updatedUser.save();
+                        }
                     }
+                } catch (memErr) {
+                    // Silently fail to keep bot alive
                 }
-            } catch (memErr) {
-                log('Memory', 'Extraction failed: ' + memErr.message);
-            }
+            })();
         }
         
         await user.save();
