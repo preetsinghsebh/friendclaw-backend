@@ -467,9 +467,6 @@ async function start() {
         res.json({ success: true, answers });
     });
 
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => log('System', `HTTP interface listening on port ${PORT}`));
-
     // Initialize Bot
     bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
