@@ -244,7 +244,7 @@ async function handleBotMessage(bot, msg) {
         // 5. STANDARD AI MESSAGE
         const persona = await personaManager.getPersona(user.activePersonaId) || await personaManager.getPersona(DEFAULT_PERSONA);
         const messages = [
-            { role: 'system', content: BUDDY_CLAW_CORE + "\n\nCHANNEL THIS CHARACTER:\n" + persona.systemPrompt }
+            { role: 'system', content: BUDDY_CLAW_CORE + "\n\nCHANNEL THIS CHARACTER:\n" + persona.systemPrompt + "\n\nCRITICAL: ALWAYS REPLY IN ENGLISH, EVEN IF THE USER SPEAKS HINDI OR HINGLISH." }
         ];
 
         if (user.memory && user.memory.length > 0) {
