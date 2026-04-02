@@ -2,6 +2,7 @@ import '../shared/env.js';
 import express from 'express';
 import cors from 'cors';
 import TelegramBot from 'node-telegram-bot-api';
+import axios from 'axios';
 import { connectDB, withRetry } from '../shared/database.js';
 import { Telemetry } from '../shared/persistence.js';
 import { personaManager } from './persona-manager.js';
@@ -449,6 +450,20 @@ async function start() {
     });
 
     log('System', 'Buddy Claw Universal Bot is live and polling!');
+
+    // Self-Keep-Alive: If SELF_URL is provided, attempt to stay awake
+    const SELF_URL = process.env.SELF_URL;
+    if (SELF_URL) {
+        log('System', `Self-pinging ${SELF_URL} every 10 mins to prevent sleep...`);
+        setInterval(async () => {
+            try {
+                await axios.get(`${SELF_URL}/health`);
+                log('System', 'Self-ping successful (Keep-Alive)');
+            } catch (err) {
+                log('System', `Self-ping failed: ${err.message}`);
+            }
+        }, 10 * 60 * 1000); // 10 minutes
+    }
 }
 
 /**

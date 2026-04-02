@@ -17,6 +17,8 @@ services:
         sync: false
       - key: SARVAM_PROXY_URL
         value: https://api.sarvam.ai/v1/chat/completions # Standard upstream
+      - key: SELF_URL
+        value: https://buddy-claw-universal.onrender.com
       - key: NODE_ENV
         value: production
     healthCheckPath: /health
