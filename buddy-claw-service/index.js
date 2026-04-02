@@ -187,6 +187,29 @@ async function handleBotMessage(bot, msg) {
             return bot.sendMessage(chatId, finalMsg, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
         }
 
+        // 3b. VIBE CHECK COMMAND
+        if (text === '/vibe' || text.toLowerCase().includes('vibe check')) {
+            const now = new Date();
+            const lastCheck = user.lastVibeCheckAt;
+            const oneDayInMs = 24 * 60 * 60 * 1000;
+
+            if (lastCheck && (now - lastCheck) < oneDayInMs && text === '/vibe') {
+                return bot.sendMessage(chatId, `Arre, wait! 🧿 i already checked your vibe today. it's *"${user.dailyVibe}"*.\nCheck back tomorrow for a new reading! ✨`, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
+            }
+
+            const persona = await personaManager.getPersona(user.activePersonaId);
+            const vibePrompt = [
+                { role: 'system', content: `${persona.systemPrompt}\n\n[PROMPT]: The user has asked for a "Vibe Check". Based on their current level (${user.level}) and your previous memory of them, give them a short, 1-2 line "Vibe Reading" for today. Be creative, character-appropriate, and mention one "Neural Frequency" (like "High-Alpha", "Static-Blue", etc).` }
+            ];
+            if (user.memory && user.memory.length > 0) vibePrompt.push(...user.memory.slice(-5));
+            
+            const vibeReply = await aiQueue.add(() => getSarvamChatResponse(vibePrompt, persona), bot, chatId);
+            user.dailyVibe = vibeReply;
+            user.lastVibeCheckAt = now;
+            await user.save();
+            return bot.sendMessage(chatId, `🧿 *Neural Reading for Today:*\n\n"${vibeReply}"`, { parse_mode: 'Markdown', reply_markup: PERSISTENT_KEYBOARD });
+        }
+
         // 4. PERSONA SWITCHER (Manual/Legacy)
         if (text === '/personas' || text.startsWith('/switch')) {
             if (text.startsWith('/switch ')) {
@@ -226,12 +249,45 @@ async function handleBotMessage(bot, msg) {
         user.xp = (user.xp || 0) + 10;
         user.totalMessages = (user.totalMessages || 0) + 1;
         
+        // --- STREAK & LEVEL UP LOGIC ---
+        const now = new Date();
+        const lastActive = user.lastActiveAt;
+        const diffInHours = lastActive ? (now - lastActive) / (1000 * 60 * 60) : 0;
+
+        if (diffInHours > 48) user.streak = 1; // Streak broken
+        else if (diffInHours > 18) user.streak = (user.streak || 0) + 1; // New distinct day
+
         if (user.totalMessages > 100) user.relationshipStage = 'Soulmate';
         else if (user.totalMessages > 50) user.relationshipStage = 'Bestie';
         else if (user.totalMessages > 10) user.relationshipStage = 'Friend';
         
+        const oldLevel = user.level || 1;
         user.level = Math.floor(Math.sqrt(user.xp / 10)) || 1;
-        user.lastActiveAt = new Date();
+        user.lastActiveAt = now;
+
+        // --- NEURAL GIFTS (Idea #2) ---
+        if (user.level > oldLevel) {
+            const personaName = persona.name;
+            let giftMsg = `✨ *NEURAL ASCENSION!* ✨\nYou've reached *Level ${user.level}* with ${personaName}! 🚀`;
+            if (user.level === 3) giftMsg += `\n\n🎁 *Unlock:* You opened a secret message! Use /mystats to see your vault.`;
+            await bot.sendMessage(chatId, giftMsg, { parse_mode: 'Markdown' });
+            user.unlockedSecrets = [...(user.unlockedSecrets || []), `${personaName}'s Level ${user.level} secret`].slice(-10);
+        }
+
+        // --- MEMORY JAR EXTRACTION (Idea #1) ---
+        if (text.length > 5 && !text.startsWith('/')) {
+            const memoryPrompt = [
+                { role: 'system', content: `[ACTION: DATA EXTRACTION]\nYou are a memory module. Look at the user's message: "${text}". Does it contain a personal fact about them (like their name, age, job, pet, favorite food, or a hobby)? If YES, extract only the fact as a short bullet point. If NO, reply "NONE".` }
+            ];
+            const fact = await getSarvamChatResponse(memoryPrompt, { id: 'system' });
+            if (fact && fact !== 'NONE' && !fact.includes('no facts')) {
+                if (!user.facts.includes(fact)) {
+                    user.facts.push(fact);
+                    if (user.facts.length > 20) user.facts.shift();
+                }
+            }
+        }
+        
         await user.save();
 
         // Update Global Stats
@@ -287,6 +343,8 @@ async function start() {
             level: user.level || 1,
             relationshipStage: user.relationshipStage || 'Stranger',
             streak: user.streak || 0,
+            dailyVibe: user.dailyVibe || '',
+            unlockedSecrets: user.unlockedSecrets || [],
             lastActive: user.lastActiveAt,
             createdAt: user.createdAt,
             nicknames: user.nicknames || ['Friend'], 
@@ -355,7 +413,9 @@ async function start() {
                 createdAt: user.createdAt,
                 memoryCount: user.memory?.length || 0,
                 xp: user.xp || 0,
-                streak: user.streak || 0
+                streak: user.streak || 0,
+                dailyVibe: user.dailyVibe || '',
+                unlockedSecretsCount: user.unlockedSecrets?.length || 0
             });
         } catch (err) {
             res.status(500).json({ error: err.message });

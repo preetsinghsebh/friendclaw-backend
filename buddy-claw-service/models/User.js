@@ -16,6 +16,9 @@ const BuddyUserSchema = new mongoose.Schema({
     relationshipStage: { type: String, default: 'Stranger' },
     nicknames: { type: [String], default: [] },
     facts: { type: [String], default: [] },
+    unlockedSecrets: { type: [String], default: [] }, // Level-based rewards
+    dailyVibe: { type: String, default: '' },
+    lastVibeCheckAt: { type: Date, default: null },
     streak: { type: Number, default: 0 },
     lastActiveAt: { type: Date, default: Date.now }
 }, { timestamps: true });
