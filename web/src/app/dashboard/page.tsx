@@ -36,6 +36,8 @@ interface UserProfile {
     level?: number;
     relationshipStage?: string;
     streak?: number;
+    dailyVibe?: string;
+    unlockedSecrets?: string[];
 }
 
 const DEFAULT_THEME: PersonaTheme = {
@@ -288,27 +290,57 @@ function DashboardContent() {
                              </div>
                         </div>
                     </div>
-                    <div className="flex gap-4">
-                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4" style={sectionStyle}>
-                            <div className="p-3 bg-red-500/10 rounded-xl">
+                    <div className="flex flex-wrap gap-4 mt-8 md:mt-0">
+                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/10 transition-all" style={sectionStyle}>
+                            <div className="p-3 bg-red-500/10 rounded-xl group-hover:scale-110 transition-transform">
                                 <Flame className="w-6 h-6 text-red-500" />
                             </div>
                             <div>
-                                <div className="text-2xl font-bold">{profile.streak || profile.streakCount || 0}</div>
+                                <div className="text-2xl font-bold">{profile.streak || 0}</div>
                                 <div className="text-[10px] uppercase tracking-widest text-white/40">Global Streak</div>
                             </div>
                         </div>
-                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4" style={sectionStyle}>
-                            <div className="p-3 bg-[#FFB300]/10 rounded-xl">
+                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/10 transition-all" style={sectionStyle}>
+                            <div className="p-3 bg-[#FFB300]/10 rounded-xl group-hover:scale-110 transition-transform">
                                 <Heart className="w-6 h-6 text-[#FFB300]" />
                             </div>
                             <div>
-                                <div className="text-2xl font-bold">{profile.moodScore}%</div>
+                                <div className="text-2xl font-bold">{profile.moodScore || 85}%</div>
                                 <div className="text-[10px] uppercase tracking-widest text-white/40">Avg Affinity</div>
+                            </div>
+                        </div>
+                        <div className="bg-white/5 border rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/10 transition-all" style={sectionStyle}>
+                            <div className="p-3 bg-purple-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                                <Activity className="w-6 h-6 text-purple-500" />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold text-purple-400 capitalize">{profile.dailyVibe ? "Active" : "Neutral"}</div>
+                                <div className="text-[10px] uppercase tracking-widest text-white/40">Neural Vibe</div>
                             </div>
                         </div>
                     </div>
                 </header>
+
+                {/* Vibe Alert Bar */}
+                {profile.dailyVibe && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 p-5 rounded-2xl bg-white/5 border-l-4 overflow-hidden relative"
+                        style={{ borderLeftColor: personaTheme.primary, backgroundColor: `${personaTheme.primary}05` }}
+                    >
+                        <div className="absolute right-0 top-0 p-4 opacity-5">
+                            <Sparkles className="w-12 h-12" />
+                        </div>
+                        <div className="flex items-center gap-3 mb-1">
+                            <Sparkles className="w-4 h-4" style={{ color: personaTheme.secondary }} />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Daily Neural Echo</span>
+                        </div>
+                        <p className="text-sm font-light italic leading-relaxed text-white/80">
+                            "{profile.dailyVibe}"
+                        </p>
+                    </motion.div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Stats Column */}
@@ -335,15 +367,19 @@ function DashboardContent() {
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        <h3 className="text-xs font-bold text-white/30 uppercase tracking-widest">Observed Facts</h3>
-                                        <ul className="space-y-2">
-                                            {profile.facts.length > 0 ? profile.facts.slice(0, 5).map((f, i) => (
-                                                <li key={i} className="flex items-start gap-3 text-sm text-white/70">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#FFB300] mt-1.5 shrink-0" />
+                                        <h3 className="text-xs font-bold text-white/30 uppercase tracking-widest">Neural Fragments</h3>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {profile.facts.length > 0 ? profile.facts.map((f, i) => (
+                                                <motion.div 
+                                                    key={i} 
+                                                    whileHover={{ x: 5 }}
+                                                    className="p-3 rounded-xl bg-white/5 border border-white/5 text-sm text-white/70 flex items-center gap-3 transition-colors hover:border-[#FFB300]/30"
+                                                >
+                                                    <div className="w-2 h-2 rounded-full shadow-[0_0_8px_#FFB300]" style={{ backgroundColor: personaTheme.primary }} />
                                                     {f}
-                                                </li>
-                                            )) : <li className="text-white/20 text-sm italic">Memory empty. Start chatting.</li>}
-                                        </ul>
+                                                </motion.div>
+                                            )) : <div className="text-white/20 text-sm italic py-4">No neural fragments synced yet.</div>}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -497,6 +533,46 @@ function DashboardContent() {
 
                     {/* Sidebar / Profile Settings Column */}
                     <div className="space-y-8">
+                        <section className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden" style={sectionStyle}>
+                            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `radial-gradient(circle at 50% 50%, ${personaTheme.primary}, transparent)` }} />
+                            <div className="flex items-center gap-3 mb-6">
+                                <Sparkles className="w-5 h-5 text-[#FFB300]" />
+                                <h2 className="text-lg font-medium text-white/80">Neural Vault</h2>
+                            </div>
+                            <div className="space-y-4 relative z-10">
+                                {profile.level && profile.level >= 3 ? (
+                                    <div className="p-4 rounded-2xl bg-[#FFB300]/10 border border-[#FFB300]/20 flex items-center gap-4">
+                                        <div className="p-2 bg-[#FFB300] rounded-xl text-black">
+                                            <Shield className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-bold text-[#FFB300] uppercase">Level 3 Reward</div>
+                                            <div className="text-xs text-white/70">Neural Link Stable. Access granted.</div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4 grayscale opacity-40">
+                                        <div className="p-2 bg-white/20 rounded-xl text-white">
+                                            <Shield className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-bold text-white/40 uppercase tracking-widest">LOCKED</div>
+                                            <div className="text-xs text-white/30 italic font-light">Reach Level 3 to unlock.</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2 mt-4 pt-4 border-t border-white/5">
+                                    <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-3">Sync Fragments</h4>
+                                    {profile.unlockedSecrets && profile.unlockedSecrets.length > 0 ? profile.unlockedSecrets.map((s, i) => (
+                                        <div key={i} className="text-xs text-white/60 flex items-center gap-2">
+                                            <CheckCircle2 className="w-3 h-3 text-[#FFB300]" /> {s}
+                                        </div>
+                                    )) : <div className="text-[10px] text-white/20 italic font-light">No artifacts recovered yet.</div>}
+                                </div>
+                            </div>
+                        </section>
+
                         <section className="bg-[#FFB300]/5 border border-[#FFB300]/20 rounded-3xl p-6">
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-12 h-12 bg-[#FFB300] rounded-2xl flex items-center justify-center text-[#05050A]">
@@ -513,8 +589,10 @@ function DashboardContent() {
                                     <span className="text-sm text-white/50">Neural ID</span>
                                     <span className="text-xs font-mono text-white/30">#{chatId}</span>
                                 </div>
-                                <button className="w-full py-4 bg-[#FFB300] text-[#05050A] rounded-2xl font-bold text-sm tracking-wide transition-transform active:scale-95 mt-4">
-                                    UNLOCK PRO FEATURES
+                                <button className="w-full py-4 bg-[#FFB300] text-[#05050A] rounded-2xl font-bold text-sm tracking-wide transition-transform active:scale-95 mt-4 group">
+                                    <span className="flex items-center justify-center gap-2">
+                                        UPGRADE PROTOCOL <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+                                    </span>
                                 </button>
                             </div>
                         </section>
